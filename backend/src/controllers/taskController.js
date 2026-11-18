@@ -1,0 +1,283 @@
+const taskService = require("../services/taskService");
+//logic for create task
+const createTask = async (req, res, next) => {
+  try {
+    const taskData = req.body;
+
+    const newTask = await taskService.createTask(taskData);
+
+    return res.status(201).json({
+      message: "Task created successfully",
+      task: newTask,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//logic for get All Task
+
+
+const getAllTasks = async (req, res, next) => {
+  try {
+    // Read query parameters
+    const status = req.query.status;
+    const priority = req.query.priority;
+    const search = req.query.search;
+    const tag = req.query.tag;
+    const fromDate = req.query.fromDate;
+    const toDate = req.query.toDate;
+
+    // Sorting parameters
+    const sortBy = req.query.sortBy ?? "createdAt";
+    const order = req.query.order ?? "desc";
+
+    // Pagination parameters
+    const pageInput = req.query.page ?? "1";
+    const limitInput = req.query.limit ?? "10";
+
+    // Validate status
+    const allowedStatuses = ["pending", "in_progress", "completed"];
+
+    if (
+      status !== undefined &&
+      (typeof status !== "string" || !allowedStatuses.includes(status))
+    ) {
+      return res.status(400).json({
+        message: "Invalid status filter"
+      });
+    }
+
+    // Validate priority
+    const allowedPriorities = ["low", "medium", "high"];
+
+    if (
+      priority !== undefined &&
+      (typeof priority !== "string" || !allowedPriorities.includes(priority))
+    ) {
+      return res.status(400).json({
+        message: "Invalid priority filter"
+      });
+    }
+
+    // Validate search
+    if (
+      search !== undefined &&
+      (typeof search !== "string" || search.trim().length === 0)
+    ) {
+      return res.status(400).json({
+        message: "Invalid search parameter"
+      });
+    }
+
+    // Validate tag
+    if (
+      tag !== undefined &&
+      (typeof tag !== "string" || tag.trim().length === 0)
+    ) {
+      return res.status(400).json({
+        message: "Invalid tag filter"
+      });
+    }
+
+    // Validate date format
+    const isValidDate = (value) => {
+      if (
+        typeof value !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value)
+      ) {
+        return false;
+      }
+
+      const date = new Date(value);
+
+      return (
+        !Number.isNaN(date.getTime()) &&
+        date.toISOString().slice(0, 10) === value
+      );
+    };
+
+    if (
+      (fromDate !== undefined && !isValidDate(fromDate)) ||
+      (toDate !== undefined && !isValidDate(toDate))
+    ) {
+      return res.status(400).json({
+        message: "Invalid date format. Use YYYY-MM-DD"
+      });
+    }
+
+    if (fromDate && toDate && fromDate > toDate) {
+      return res.status(400).json({
+        message: "fromDate cannot be after toDate"
+      });
+    }
+
+    // Validate sorting field
+    const allowedSortFields = ["dueDate", "priority", "createdAt"];
+
+    if (
+      typeof sortBy !== "string" ||
+      !allowedSortFields.includes(sortBy)
+    ) {
+      return res.status(400).json({
+        message: "Invalid sortBy parameter"
+      });
+    }
+
+    // Validate sorting order
+    const allowedOrders = ["asc", "desc"];
+
+    if (
+      typeof order !== "string" ||
+      !allowedOrders.includes(order)
+    ) {
+      return res.status(400).json({
+        message: "Invalid order parameter"
+      });
+    }
+
+    // Validate pagination
+    const isPositiveInteger = (value) =>
+      typeof value === "string" &&
+      /^[1-9]\d*$/.test(value) &&
+      Number.isSafeInteger(Number(value));
+
+    if (
+      !isPositiveInteger(pageInput) ||
+      !isPositiveInteger(limitInput) ||
+      Number(limitInput) > 100
+    ) {
+      return res.status(400).json({
+        message: "Invalid pagination parameters"
+      });
+    }
+
+    const page = Number(pageInput);
+    const limit = Number(limitInput);
+
+    // Fetch filtered, sorted and paginated tasks
+    const result = await taskService.getAllTasks(
+      status,
+      priority,
+      search,
+      tag,
+      fromDate,
+      toDate,
+      sortBy,
+      order,
+      page,
+      limit
+    );
+
+    return res.status(200).json({
+      message: "Tasks fetched successfully",
+      count: result.tasks.length,
+      totalTasks: result.totalTasks,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      tasks: result.tasks
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
+//logic for get task by id
+const getTaskById = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+
+    const task = await taskService.getTaskById(id);
+
+    if (!task) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Task fetched successfully",
+      task: task,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//logic for update task by id
+const updateTask = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+
+    const allowedFields = [
+      "title",
+      "description",
+      "status",
+      "priority",
+      "dueDate",
+      "tags",
+    ];
+
+    const updateData = {};
+
+    for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        message: "Provide at least one valid field to update",
+      });
+    }
+
+    const updatedTask = await taskService.updateTask(id, updateData);
+
+    if (!updatedTask) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Task updated successfully",
+      task: updatedTask,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// logic for delete task
+const deleteTask = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+
+    const deletedTask = await taskService.deleteTask(id);
+
+    if (!deletedTask) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Task deleted successfully",
+      task: deletedTask,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  createTask,
+  getAllTasks,
+  getTaskById,
+  updateTask,
+  deleteTask,
+};
