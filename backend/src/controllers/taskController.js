@@ -1,8 +1,17 @@
+
 const taskService = require("../services/taskService");
-//logic for create task
+
+// ==========================================
+// 1. CREATE TASK
+// ==========================================
+
 const createTask = async (req, res, next) => {
   try {
-    const taskData = req.body;
+    // Include the authenticated user as the creator
+    const taskData = {
+      ...req.body,
+      createdBy: req.user.id,
+    };
 
     const newTask = await taskService.createTask(taskData);
 
@@ -15,12 +24,14 @@ const createTask = async (req, res, next) => {
   }
 };
 
-//logic for get All Task
-
+// ==========================================
+// 2. GET ALL TASKS
+// Filtering, Searching, Sorting, Pagination
+// ==========================================
 
 const getAllTasks = async (req, res, next) => {
   try {
-    // Read query parameters
+    // Filtering parameters
     const status = req.query.status;
     const priority = req.query.priority;
     const search = req.query.search;
@@ -37,14 +48,21 @@ const getAllTasks = async (req, res, next) => {
     const limitInput = req.query.limit ?? "10";
 
     // Validate status
-    const allowedStatuses = ["pending", "in_progress", "completed"];
+    const allowedStatuses = [
+      "pending",
+      "in_progress",
+      "completed",
+    ];
 
     if (
       status !== undefined &&
-      (typeof status !== "string" || !allowedStatuses.includes(status))
+      (
+        typeof status !== "string" ||
+        !allowedStatuses.includes(status)
+      )
     ) {
       return res.status(400).json({
-        message: "Invalid status filter"
+        message: "Invalid status filter",
       });
     }
 
@@ -53,30 +71,39 @@ const getAllTasks = async (req, res, next) => {
 
     if (
       priority !== undefined &&
-      (typeof priority !== "string" || !allowedPriorities.includes(priority))
+      (
+        typeof priority !== "string" ||
+        !allowedPriorities.includes(priority)
+      )
     ) {
       return res.status(400).json({
-        message: "Invalid priority filter"
+        message: "Invalid priority filter",
       });
     }
 
     // Validate search
     if (
       search !== undefined &&
-      (typeof search !== "string" || search.trim().length === 0)
+      (
+        typeof search !== "string" ||
+        search.trim().length === 0
+      )
     ) {
       return res.status(400).json({
-        message: "Invalid search parameter"
+        message: "Invalid search parameter",
       });
     }
 
     // Validate tag
     if (
       tag !== undefined &&
-      (typeof tag !== "string" || tag.trim().length === 0)
+      (
+        typeof tag !== "string" ||
+        tag.trim().length === 0
+      )
     ) {
       return res.status(400).json({
-        message: "Invalid tag filter"
+        message: "Invalid tag filter",
       });
     }
 
@@ -102,25 +129,29 @@ const getAllTasks = async (req, res, next) => {
       (toDate !== undefined && !isValidDate(toDate))
     ) {
       return res.status(400).json({
-        message: "Invalid date format. Use YYYY-MM-DD"
+        message: "Invalid date format. Use YYYY-MM-DD",
       });
     }
 
     if (fromDate && toDate && fromDate > toDate) {
       return res.status(400).json({
-        message: "fromDate cannot be after toDate"
+        message: "fromDate cannot be after toDate",
       });
     }
 
     // Validate sorting field
-    const allowedSortFields = ["dueDate", "priority", "createdAt"];
+    const allowedSortFields = [
+      "dueDate",
+      "priority",
+      "createdAt",
+    ];
 
     if (
       typeof sortBy !== "string" ||
       !allowedSortFields.includes(sortBy)
     ) {
       return res.status(400).json({
-        message: "Invalid sortBy parameter"
+        message: "Invalid sortBy parameter",
       });
     }
 
@@ -132,7 +163,7 @@ const getAllTasks = async (req, res, next) => {
       !allowedOrders.includes(order)
     ) {
       return res.status(400).json({
-        message: "Invalid order parameter"
+        message: "Invalid order parameter",
       });
     }
 
@@ -148,7 +179,7 @@ const getAllTasks = async (req, res, next) => {
       Number(limitInput) > 100
     ) {
       return res.status(400).json({
-        message: "Invalid pagination parameters"
+        message: "Invalid pagination parameters",
       });
     }
 
@@ -175,17 +206,17 @@ const getAllTasks = async (req, res, next) => {
       totalTasks: result.totalTasks,
       totalPages: result.totalPages,
       currentPage: result.currentPage,
-      tasks: result.tasks
+      tasks: result.tasks,
     });
-
   } catch (error) {
     next(error);
   }
 };
 
+// ==========================================
+// 3. GET TASK BY ID
+// ==========================================
 
-
-//logic for get task by id
 const getTaskById = async (req, res, next) => {
   try {
     const id = req.params.id;
@@ -207,11 +238,15 @@ const getTaskById = async (req, res, next) => {
   }
 };
 
-//logic for update task by id
+// ==========================================
+// 4. UPDATE TASK BY ID
+// ==========================================
+
 const updateTask = async (req, res, next) => {
   try {
     const id = req.params.id;
 
+    // Only allow these fields to be updated
     const allowedFields = [
       "title",
       "description",
@@ -224,7 +259,9 @@ const updateTask = async (req, res, next) => {
     const updateData = {};
 
     for (const field of allowedFields) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      if (
+        Object.prototype.hasOwnProperty.call(req.body, field)
+      ) {
         updateData[field] = req.body[field];
       }
     }
@@ -235,7 +272,10 @@ const updateTask = async (req, res, next) => {
       });
     }
 
-    const updatedTask = await taskService.updateTask(id, updateData);
+    const updatedTask = await taskService.updateTask(
+      id,
+      updateData
+    );
 
     if (!updatedTask) {
       return res.status(404).json({
@@ -252,7 +292,10 @@ const updateTask = async (req, res, next) => {
   }
 };
 
-// logic for delete task
+// ==========================================
+// 5. DELETE TASK BY ID
+// ==========================================
+
 const deleteTask = async (req, res, next) => {
   try {
     const id = req.params.id;
@@ -273,6 +316,10 @@ const deleteTask = async (req, res, next) => {
     next(error);
   }
 };
+
+// ==========================================
+// EXPORT CONTROLLERS
+// ==========================================
 
 module.exports = {
   createTask,
