@@ -1,6 +1,6 @@
 const express = require("express");
 const taskRoutes = require("./routes/taskRoutes");
-
+const authRoutes = require("./routes/authRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 const app = express();
 
@@ -12,6 +12,6 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/tasks",taskRoutes);
-
+app.use("/api/auth", authRoutes);
 app.use(errorHandler);
 module.exports = app;
