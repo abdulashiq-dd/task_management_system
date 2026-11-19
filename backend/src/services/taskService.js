@@ -2,6 +2,7 @@
 const Task = require("../models/taskModel");
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
+const taskEventEmitter = require("../events/taskEventEmitter");
 
 // ==========================================
 // HELPER — ERROR HANDLING
@@ -18,9 +19,7 @@ const createError = (message, statusCode) => {
 // ==========================================
 
 const isTaskCreator = (task, currentUser) => {
-  return (
-    task.createdBy?.toString() === currentUser.id
-  );
+  return task.createdBy?.toString() === currentUser.id;
 };
 
 const canViewTask = (task, currentUser) => {
@@ -32,11 +31,36 @@ const canViewTask = (task, currentUser) => {
 };
 
 // ==========================================
+// HELPER — EMIT TASK EVENT
+// ==========================================
+
+const emitTaskEvent = (eventType, task, userId, details = {}) => {
+  taskEventEmitter.emit(eventType, {
+    taskId: task._id,
+    performedBy: userId,
+    details,
+  });
+};
+
+// ==========================================
 // 1. CREATE TASK
 // ==========================================
 
 const createTask = async (taskData) => {
   const newTask = await Task.create(taskData);
+
+  // Emit event only after successful creation.
+  emitTaskEvent(
+    "taskCreated",
+    newTask,
+    newTask.createdBy,
+    {
+      title: newTask.title,
+      status: newTask.status,
+      priority: newTask.priority,
+    }
+  );
+
   return newTask;
 };
 
@@ -65,16 +89,16 @@ const getAllTasks = async (
 
   const filter = {};
 
-  // Users can see owned or assigned tasks.
+  // Users see their owned or assigned tasks.
   // Admins can see all tasks.
   if (currentUser.role !== "admin") {
     filter.$and = [
       {
         $or: [
           { createdBy: currentUser.id },
-          { assignedTo: currentUser.id }
-        ]
-      }
+          { assignedTo: currentUser.id },
+        ],
+      },
     ];
   }
 
@@ -99,15 +123,15 @@ const getAllTasks = async (
       {
         title: {
           $regex: escapedSearch,
-          $options: "i"
-        }
+          $options: "i",
+        },
       },
       {
         description: {
           $regex: escapedSearch,
-          $options: "i"
-        }
-      }
+          $options: "i",
+        },
+      },
     ];
   }
 
@@ -134,8 +158,6 @@ const getAllTasks = async (
   // Pagination
   const skip = (page - 1) * limit;
 
-  // Count documents after applying permissions
-  // and filters.
   const totalTasks = await Task.countDocuments(filter);
 
   let tasks;
@@ -169,7 +191,7 @@ const getAllTasks = async (
     tasks = await Task.find(filter)
       .sort({
         [sortBy]: direction,
-        _id: 1
+        _id: 1,
       })
       .skip(skip)
       .limit(limit);
@@ -179,7 +201,7 @@ const getAllTasks = async (
     tasks,
     totalTasks,
     totalPages: Math.ceil(totalTasks / limit),
-    currentPage: page
+    currentPage: page,
   };
 };
 
@@ -247,20 +269,60 @@ const updateTask = async (
     );
   }
 
-  // Enforce ownership in the database operation.
   const permissionFilter =
     currentUser.role === "admin"
       ? { _id: id }
-      : { _id: id, createdBy: currentUser.id };
+      : {
+          _id: id,
+          createdBy: currentUser.id,
+        };
 
-  return Task.findOneAndUpdate(
+  // Capture previous status before updating.
+  const previousStatus = task.status;
+
+  const updatedTask = await Task.findOneAndUpdate(
     permissionFilter,
     updateData,
     {
-      new: true,
-      runValidators: true
+      returnDocument: "after",
+      runValidators: true,
     }
   );
+
+  if (!updatedTask) {
+    return null;
+  }
+
+  // Emit taskUpdated event.
+  emitTaskEvent(
+    "taskUpdated",
+    updatedTask,
+    currentUser.id,
+    {
+      previousStatus,
+      newStatus: updatedTask.status,
+      updatedFields: Object.keys(updateData),
+    }
+  );
+
+  // Emit taskCompleted only when transitioning
+  // from another status to completed.
+  if (
+    previousStatus !== "completed" &&
+    updatedTask.status === "completed"
+  ) {
+    emitTaskEvent(
+      "taskCompleted",
+      updatedTask,
+      currentUser.id,
+      {
+        previousStatus,
+        newStatus: "completed",
+      }
+    );
+  }
+
+  return updatedTask;
 };
 
 // ==========================================
@@ -293,11 +355,13 @@ const deleteTask = async (id, currentUser) => {
     );
   }
 
-  // Enforce ownership in the database operation.
   const permissionFilter =
     currentUser.role === "admin"
       ? { _id: id }
-      : { _id: id, createdBy: currentUser.id };
+      : {
+          _id: id,
+          createdBy: currentUser.id,
+        };
 
   return Task.findOneAndDelete(permissionFilter);
 };
@@ -339,7 +403,6 @@ const assignTask = async (
     );
   }
 
-  // Verify the assigned user exists.
   const user = await User.findById(assignedTo);
 
   if (!user) {
@@ -351,18 +414,38 @@ const assignTask = async (
       ? { _id: taskId }
       : {
           _id: taskId,
-          createdBy: currentUser.id
+          createdBy: currentUser.id,
         };
 
-  // Do not change the original creator.
-  return Task.findOneAndUpdate(
+  const previousAssignee = task.assignedTo;
+
+  const updatedTask = await Task.findOneAndUpdate(
     permissionFilter,
-    { assignedTo: user._id },
     {
-      new: true,
-      runValidators: true
+      assignedTo: user._id,
+    },
+    {
+      returnDocument: "after",
+      runValidators: true,
     }
   );
+
+  if (!updatedTask) {
+    return null;
+  }
+
+  // Emit assignment event.
+  emitTaskEvent(
+    "taskAssigned",
+    updatedTask,
+    currentUser.id,
+    {
+      previousAssignee,
+      assignedTo: user._id,
+    }
+  );
+
+  return updatedTask;
 };
 
 // ==========================================
@@ -375,5 +458,5 @@ module.exports = {
   getTaskById,
   updateTask,
   deleteTask,
-  assignTask
+  assignTask,
 };

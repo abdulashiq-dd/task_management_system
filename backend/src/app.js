@@ -1,6 +1,8 @@
 const express = require("express");
 const taskRoutes = require("./routes/taskRoutes");
 const authRoutes = require("./routes/authRoutes");
+require("./events/taskActivityListener");
+require("./events/taskConsoleListener");
 const errorHandler = require("./middleware/errorMiddleware");
 const app = express();
 
