@@ -1,4 +1,3 @@
-
 const Task = require("../models/taskModel");
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
@@ -50,16 +49,11 @@ const createTask = async (taskData) => {
   const newTask = await Task.create(taskData);
 
   // Emit event only after successful creation.
-  emitTaskEvent(
-    "taskCreated",
-    newTask,
-    newTask.createdBy,
-    {
-      title: newTask.title,
-      status: newTask.status,
-      priority: newTask.priority,
-    }
-  );
+  emitTaskEvent("taskCreated", newTask, newTask.createdBy, {
+    title: newTask.title,
+    status: newTask.status,
+    priority: newTask.priority,
+  });
 
   return newTask;
 };
@@ -81,7 +75,7 @@ const getAllTasks = async (
   order = "desc",
   page = 1,
   limit = 10,
-  currentUser
+  currentUser,
 ) => {
   if (!currentUser?.id) {
     throw createError("Authentication required", 401);
@@ -94,10 +88,7 @@ const getAllTasks = async (
   if (currentUser.role !== "admin") {
     filter.$and = [
       {
-        $or: [
-          { createdBy: currentUser.id },
-          { assignedTo: currentUser.id },
-        ],
+        $or: [{ createdBy: currentUser.id }, { assignedTo: currentUser.id }],
       },
     ];
   }
@@ -114,10 +105,7 @@ const getAllTasks = async (
 
   // Search by title or description
   if (search) {
-    const escapedSearch = search.replace(
-      /[.*+?^${}()|[\]\\]/g,
-      "\\$&"
-    );
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     filter.$or = [
       {
@@ -170,18 +158,13 @@ const getAllTasks = async (
 
     tasks.sort((a, b) => {
       const difference =
-        priorityOrder.indexOf(a.priority) -
-        priorityOrder.indexOf(b.priority);
+        priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority);
 
       if (difference !== 0) {
-        return order === "asc"
-          ? difference
-          : -difference;
+        return order === "asc" ? difference : -difference;
       }
 
-      return String(a._id).localeCompare(
-        String(b._id)
-      );
+      return String(a._id).localeCompare(String(b._id));
     });
 
     tasks = tasks.slice(skip, skip + limit);
@@ -226,10 +209,7 @@ const getTaskById = async (id, currentUser) => {
   }
 
   if (!canViewTask(task, currentUser)) {
-    throw createError(
-      "Not authorized to view this task",
-      403
-    );
+    throw createError("Not authorized to view this task", 403);
   }
 
   return task;
@@ -240,11 +220,7 @@ const getTaskById = async (id, currentUser) => {
 // Creator or admin only
 // ==========================================
 
-const updateTask = async (
-  id,
-  updateData,
-  currentUser
-) => {
+const updateTask = async (id, updateData, currentUser) => {
   if (!mongoose.isValidObjectId(id)) {
     throw createError("Invalid task ID", 400);
   }
@@ -259,14 +235,8 @@ const updateTask = async (
     return null;
   }
 
-  if (
-    !isTaskCreator(task, currentUser) &&
-    currentUser.role !== "admin"
-  ) {
-    throw createError(
-      "Not authorized to update this task",
-      403
-    );
+  if (!isTaskCreator(task, currentUser) && currentUser.role !== "admin") {
+    throw createError("Not authorized to update this task", 403);
   }
 
   const permissionFilter =
@@ -279,14 +249,14 @@ const updateTask = async (
 
   // Capture previous status before updating.
   const previousStatus = task.status;
-
+  const previousPriority = task.priority;
   const updatedTask = await Task.findOneAndUpdate(
     permissionFilter,
     updateData,
     {
       returnDocument: "after",
       runValidators: true,
-    }
+    },
   );
 
   if (!updatedTask) {
@@ -294,32 +264,21 @@ const updateTask = async (
   }
 
   // Emit taskUpdated event.
-  emitTaskEvent(
-    "taskUpdated",
-    updatedTask,
-    currentUser.id,
-    {
-      previousStatus,
-      newStatus: updatedTask.status,
-      updatedFields: Object.keys(updateData),
-    }
-  );
+  emitTaskEvent("taskUpdated", updatedTask, currentUser.id, {
+    previousStatus,
+    newStatus: updatedTask.status,
+    previousPriority,
+    newPriority: updatedTask.priority,
+    updatedFields: Object.keys(updateData),
+  });
 
   // Emit taskCompleted only when transitioning
   // from another status to completed.
-  if (
-    previousStatus !== "completed" &&
-    updatedTask.status === "completed"
-  ) {
-    emitTaskEvent(
-      "taskCompleted",
-      updatedTask,
-      currentUser.id,
-      {
-        previousStatus,
-        newStatus: "completed",
-      }
-    );
+  if (previousStatus !== "completed" && updatedTask.status === "completed") {
+    emitTaskEvent("taskCompleted", updatedTask, currentUser.id, {
+      previousStatus,
+      newStatus: "completed",
+    });
   }
 
   return updatedTask;
@@ -345,14 +304,8 @@ const deleteTask = async (id, currentUser) => {
     return null;
   }
 
-  if (
-    !isTaskCreator(task, currentUser) &&
-    currentUser.role !== "admin"
-  ) {
-    throw createError(
-      "Not authorized to delete this task",
-      403
-    );
+  if (!isTaskCreator(task, currentUser) && currentUser.role !== "admin") {
+    throw createError("Not authorized to delete this task", 403);
   }
 
   const permissionFilter =
@@ -371,11 +324,7 @@ const deleteTask = async (id, currentUser) => {
 // Creator or admin only
 // ==========================================
 
-const assignTask = async (
-  taskId,
-  assignedTo,
-  currentUser
-) => {
+const assignTask = async (taskId, assignedTo, currentUser) => {
   if (
     !mongoose.isValidObjectId(taskId) ||
     !mongoose.isValidObjectId(assignedTo)
@@ -393,14 +342,8 @@ const assignTask = async (
     throw createError("Task not found", 404);
   }
 
-  if (
-    !isTaskCreator(task, currentUser) &&
-    currentUser.role !== "admin"
-  ) {
-    throw createError(
-      "Not authorized to assign this task",
-      403
-    );
+  if (!isTaskCreator(task, currentUser) && currentUser.role !== "admin") {
+    throw createError("Not authorized to assign this task", 403);
   }
 
   const user = await User.findById(assignedTo);
@@ -427,7 +370,7 @@ const assignTask = async (
     {
       returnDocument: "after",
       runValidators: true,
-    }
+    },
   );
 
   if (!updatedTask) {
@@ -435,15 +378,10 @@ const assignTask = async (
   }
 
   // Emit assignment event.
-  emitTaskEvent(
-    "taskAssigned",
-    updatedTask,
-    currentUser.id,
-    {
-      previousAssignee,
-      assignedTo: user._id,
-    }
-  );
+  emitTaskEvent("taskAssigned", updatedTask, currentUser.id, {
+    previousAssignee,
+    assignedTo: user._id,
+  });
 
   return updatedTask;
 };
