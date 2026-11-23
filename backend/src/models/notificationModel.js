@@ -22,6 +22,8 @@ const notificationSchema = new mongoose.Schema(
         "taskAssigned",
         "taskCompleted",
         "priorityChanged",
+        "taskReminder",
+        "taskOverdue",
       ],
       required: true,
     },
@@ -36,17 +38,41 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // Deadline associated with the reminder.
+    reminderDueDate: {
+      type: Date,
+    },
+
+    // Unique identifier for scheduled notifications.
+    deduplicationKey: {
+      type: String,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Optimize listing notifications by user and date.
+// Retrieve user notifications efficiently.
 notificationSchema.index({
   user: 1,
   createdAt: -1,
 });
+
+// Prevent duplicate scheduled notifications.
+// Existing notifications without a key are unaffected.
+notificationSchema.index(
+  {
+    deduplicationKey: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      deduplicationKey: { $type: "string" },
+    },
+  }
+);
 
 module.exports = mongoose.model(
   "Notification",

@@ -1,4 +1,3 @@
-
 const mongoose = require("mongoose");
 
 const taskSchema = new mongoose.Schema(
@@ -35,7 +34,15 @@ const taskSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    isOverdue: {
+      type: Boolean,
+      default: false,
+    },
 
+    overdueAt: {
+      type: Date,
+      default: null,
+    },
     // User who created the task
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -52,9 +59,13 @@ const taskSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const Task = mongoose.model("Task", taskSchema);
+taskSchema.index({
+  status: 1,
+  dueDate: 1,
+});
 
 module.exports = Task;
