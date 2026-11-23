@@ -1,7 +1,9 @@
 
 const mongoose = require("mongoose");
 
-const { JOB_TYPES } = require("../queues/jobQueue");
+const {
+  JOB_TYPES,
+} = require("../queues/jobQueue");
 
 const notificationService = require(
   "../services/notificationService"
@@ -15,21 +17,38 @@ const TaskActivity = require(
   "../models/taskActivityModel"
 );
 
+const {
+  createIdempotent,
+} = require("../utils/idempotentWrite");
+
+const {
+  NonRetryableError,
+} = require("../utils/jobErrors");
+
+const {
+  sleep,
+} = require("../utils/retry");
+
 // ==========================================
 // CONFIGURATION
 // ==========================================
 
 const REPORT_DELAY_MS = 5000;
 
-const delay = (ms) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 // ==========================================
 // 1. NOTIFICATION JOB HANDLER
 // ==========================================
 
-async function handleNotificationJob(payload) {
-  const { user, task, type, message } = payload;
+async function handleNotificationJob(
+  payload,
+  backgroundJobId
+) {
+  const {
+    user,
+    task,
+    type,
+    message,
+  } = payload;
 
   if (
     !mongoose.isValidObjectId(user) ||
@@ -37,8 +56,17 @@ async function handleNotificationJob(payload) {
     !type ||
     !message
   ) {
-    throw new Error(
+    throw new NonRetryableError(
       "Invalid notification job payload"
+    );
+  }
+
+  if (
+    typeof backgroundJobId !== "string" ||
+    !backgroundJobId.trim()
+  ) {
+    throw new NonRetryableError(
+      "Valid background job ID is required"
     );
   }
 
@@ -52,6 +80,7 @@ async function handleNotificationJob(payload) {
       task,
       type,
       message,
+      backgroundJobId,
     });
 
   return {
@@ -65,7 +94,10 @@ async function handleNotificationJob(payload) {
 // 2. ACTIVITY LOG JOB HANDLER
 // ==========================================
 
-async function handleActivityLogJob(payload) {
+async function handleActivityLogJob(
+  payload,
+  backgroundJobId
+) {
   const {
     task,
     eventType,
@@ -78,7 +110,7 @@ async function handleActivityLogJob(payload) {
     !mongoose.isValidObjectId(performedBy) ||
     !eventType
   ) {
-    throw new Error(
+    throw new NonRetryableError(
       "Invalid activity log job payload"
     );
   }
@@ -87,12 +119,16 @@ async function handleActivityLogJob(payload) {
     "[Job Handler] Creating activity log..."
   );
 
-  const activity = await TaskActivity.create({
-    task,
-    eventType,
-    performedBy,
-    details,
-  });
+  const activity = await createIdempotent(
+    TaskActivity,
+    backgroundJobId,
+    {
+      task,
+      eventType,
+      performedBy,
+      details,
+    }
+  );
 
   return {
     activityId: String(activity._id),
@@ -106,10 +142,15 @@ async function handleActivityLogJob(payload) {
 // ==========================================
 
 async function handleReportGenerationJob(payload) {
-  const { reportType, currentUser } = payload;
+
+  const {
+    reportType,
+    currentUser,
+  } = payload;
 
   if (reportType !== "taskSummary") {
-    throw new Error(
+
+    throw new NonRetryableError(
       `Unsupported report type: ${reportType}`
     );
   }
@@ -117,9 +158,9 @@ async function handleReportGenerationJob(payload) {
   if (
     !currentUser ||
     !mongoose.isValidObjectId(currentUser.id) ||
-    !currentUser.role
+    !["user", "admin"].includes(currentUser.role)
   ) {
-    throw new Error(
+    throw new NonRetryableError(
       "Valid authenticated user is required"
     );
   }
@@ -128,10 +169,8 @@ async function handleReportGenerationJob(payload) {
     "[Job Handler] Generating task summary report..."
   );
 
-  // Simulate slow asynchronous background work.
-  await delay(REPORT_DELAY_MS);
+  await sleep(REPORT_DELAY_MS);
 
-  // Reuse existing Milestone 6 dashboard service.
   const dashboard =
     await dashboardService.getDashboardStats({
       id: currentUser.id,
@@ -158,28 +197,44 @@ async function handleReportGenerationJob(payload) {
 // ==========================================
 
 async function executeJob(job) {
+
   if (
     !job ||
+    typeof job.id !== "string" ||
+    !job.id.trim() ||
     !job.type ||
     !job.payload ||
     typeof job.payload !== "object" ||
     Array.isArray(job.payload)
   ) {
-    throw new Error("Invalid job");
+    throw new NonRetryableError("Invalid job");
   }
 
   switch (job.type) {
+
     case JOB_TYPES.NOTIFICATION:
-      return handleNotificationJob(job.payload);
+
+      return handleNotificationJob(
+        job.payload,
+        job.id
+      );
 
     case JOB_TYPES.ACTIVITY_LOG:
-      return handleActivityLogJob(job.payload);
+
+      return handleActivityLogJob(
+        job.payload,
+        job.id
+      );
 
     case JOB_TYPES.REPORT_GENERATION:
-      return handleReportGenerationJob(job.payload);
+
+      return handleReportGenerationJob(
+        job.payload
+      );
 
     default:
-      throw new Error(
+
+      throw new NonRetryableError(
         `Unsupported job type: ${job.type}`
       );
   }

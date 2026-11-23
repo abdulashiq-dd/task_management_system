@@ -39,14 +39,21 @@ const notificationSchema = new mongoose.Schema(
       default: false,
     },
 
-    // Deadline associated with the reminder.
+    // Milestone 7: Reminder deadline.
     reminderDueDate: {
       type: Date,
     },
 
-    // Unique identifier for scheduled notifications.
+    // Milestone 7: Prevent duplicate reminders.
     deduplicationKey: {
       type: String,
+    },
+
+    // Milestone 9: Prevent duplicate background writes.
+    backgroundJobId: {
+      type: String,
+      trim: true,
+      immutable: true,
     },
   },
   {
@@ -60,8 +67,7 @@ notificationSchema.index({
   createdAt: -1,
 });
 
-// Prevent duplicate scheduled notifications.
-// Existing notifications without a key are unaffected.
+// Milestone 7: Prevent duplicate scheduled notifications.
 notificationSchema.index(
   {
     deduplicationKey: 1,
@@ -70,6 +76,19 @@ notificationSchema.index(
     unique: true,
     partialFilterExpression: {
       deduplicationKey: { $type: "string" },
+    },
+  }
+);
+
+// Milestone 9: Prevent duplicate background notifications.
+notificationSchema.index(
+  {
+    backgroundJobId: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      backgroundJobId: { $type: "string" },
     },
   }
 );
