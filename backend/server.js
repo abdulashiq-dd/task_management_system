@@ -2,86 +2,173 @@
 require("dotenv").config();
 
 const mongoose = require("mongoose");
+
 const app = require("./src/app");
+
 const connectDB = require("./src/config/db");
 
-const Notification = require("./src/models/notificationModel");
+const Notification = require(
+  "./src/models/notificationModel"
+);
 
 const {
   startReminderJob,
   stopReminderJob,
 } = require("./src/jobs/reminderJob");
 
+const {
+  jobWorker,
+} = require("./src/workers/jobWorker");
+
+// ==========================================
+// SERVER CONFIGURATION
+// ==========================================
+
 const PORT = process.env.PORT || 5000;
 
-let server;
+let server = null;
+let isShuttingDown = false;
 
 // ==========================================
 // START SERVER
 // ==========================================
 
-const startServer = async () => {
+async function startServer() {
   try {
-    // Connect to MongoDB.
+    // 1. Connect to MongoDB.
     await connectDB();
 
-    // Initialize notification model and indexes.
+    // 2. Initialize notification indexes.
     await Notification.init();
 
-    // Ensure declared indexes exist.
     await Notification.createIndexes();
 
-    console.log("Notification indexes initialized");
+    console.log(
+      "Notification indexes initialized"
+    );
 
-    // Start Express server.
+    // 3. Start Express server.
     server = app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(
+        `Server running on http://localhost:${PORT}`
+      );
 
-      // Start background reminder scheduler.
+      // 4. Start Milestone 7 reminder scheduler.
       startReminderJob();
+
+      // 5. Start Milestone 8 background worker.
+      jobWorker.start();
+    });
+
+    server.on("error", (error) => {
+      console.error(
+        "HTTP server error:",
+        error.message
+      );
+
+      void shutdown("SERVER_ERROR", 1);
     });
 
   } catch (error) {
-    console.error("Unable to start server:", error.message);
-    process.exit(1);
+    console.error(
+      "Server startup failed:",
+      error.message
+    );
+
+    await shutdown("STARTUP_ERROR", 1);
   }
-};
+}
 
 // ==========================================
 // GRACEFUL SHUTDOWN
 // ==========================================
 
-const shutdown = async (signal) => {
+async function shutdown(
+  signal,
+  exitCode = 0
+) {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+
   console.log(`\n${signal} received`);
 
-  // Stop future reminder checks.
-  stopReminderJob();
+  console.log(
+    "Starting graceful shutdown..."
+  );
+
+  // Prevent indefinite shutdown.
+  const forceExitTimer = setTimeout(() => {
+    console.error(
+      "Graceful shutdown timed out"
+    );
+
+    process.exit(1);
+  }, 30000);
 
   try {
-    if (server) {
+    // 1. Stop future reminder checks.
+    stopReminderJob();
+
+    // 2. Stop accepting new HTTP requests.
+    if (server && server.listening) {
       await new Promise((resolve, reject) => {
         server.close((error) => {
-          if (error) reject(error);
-          else resolve();
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
         });
       });
+
+      console.log("HTTP server stopped");
     }
 
+    // 3. Stop job consumption and wait
+    // for currently executing jobs.
+    await jobWorker.stop();
+
+    // 4. Disconnect MongoDB.
     await mongoose.disconnect();
 
     console.log("MongoDB disconnected");
-    console.log("Server stopped successfully");
 
-    process.exit(0);
+    console.log(
+      "Graceful shutdown completed"
+    );
+
+    process.exitCode = exitCode;
 
   } catch (error) {
-    console.error("Shutdown error:", error.message);
-    process.exit(1);
+    console.error(
+      "Shutdown error:",
+      error.message
+    );
+
+    process.exitCode = 1;
+
+  } finally {
+    clearTimeout(forceExitTimer);
   }
-};
+}
 
-process.once("SIGINT", () => shutdown("SIGINT"));
-process.once("SIGTERM", () => shutdown("SIGTERM"));
+// ==========================================
+// PROCESS SIGNALS
+// ==========================================
 
-// Start application.
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
+
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
+
+// ==========================================
+// INITIALIZE APPLICATION
+// ==========================================
+
 startServer();

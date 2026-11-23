@@ -1,13 +1,15 @@
 
 const taskEventEmitter = require("./taskEventEmitter");
+
 const Task = require("../models/taskModel");
 
 const {
-  createNotification,
-} = require("../services/notificationService");
+  jobQueue,
+  JOB_TYPES,
+} = require("../queues/jobQueue");
 
 // ==========================================
-// HELPER — HANDLE NOTIFICATION ERRORS
+// HELPER - HANDLE NOTIFICATION ERRORS
 // ==========================================
 
 const handleNotification = async (callback) => {
@@ -15,11 +17,45 @@ const handleNotification = async (callback) => {
     await callback();
   } catch (error) {
     console.error(
-      "[Notification Error]",
+      "[Notification Queue Error]",
       error.message
     );
   }
 };
+
+// ==========================================
+// HELPER - ENQUEUE NOTIFICATION
+// ==========================================
+
+function queueNotification({
+  user,
+  task,
+  type,
+  message,
+}) {
+  if (!user || !task || !type || !message) {
+    throw new Error(
+      "Notification details are required"
+    );
+  }
+
+  const job = jobQueue.enqueue(
+    JOB_TYPES.NOTIFICATION,
+    {
+      user: String(user),
+      task: String(task),
+      type,
+      message,
+    },
+    String(user)
+  );
+
+  console.log(
+    `[Notification Listener] ${type} queued: ${job.id}`
+  );
+
+  return job;
+}
 
 // ==========================================
 // 1. TASK ASSIGNED
@@ -28,12 +64,13 @@ const handleNotification = async (callback) => {
 taskEventEmitter.on("taskAssigned", (data) => {
   void handleNotification(async () => {
     const assignedTo = data.details?.assignedTo;
+
     const previousAssignee =
       data.details?.previousAssignee;
 
     if (!assignedTo) return;
 
-    // Avoid notifying when the assignee is unchanged.
+    // Avoid duplicate assignment notifications.
     if (
       previousAssignee?.toString() ===
       assignedTo.toString()
@@ -41,14 +78,12 @@ taskEventEmitter.on("taskAssigned", (data) => {
       return;
     }
 
-    await createNotification({
+    queueNotification({
       user: assignedTo,
       task: data.taskId,
       type: "taskAssigned",
       message: "You have been assigned a task.",
     });
-
-    console.log("Assignment notification created");
   });
 });
 
@@ -58,21 +93,23 @@ taskEventEmitter.on("taskAssigned", (data) => {
 
 taskEventEmitter.on("taskCompleted", (data) => {
   void handleNotification(async () => {
-    const task = await Task.findById(data.taskId);
+    const task = await Task.findById(
+      data.taskId
+    );
 
     if (!task) return;
 
-    // Notify assignee, or creator if unassigned.
-    const recipient = task.assignedTo || task.createdBy;
+    // Notify assignee or creator if unassigned.
+    const recipient =
+      task.assignedTo || task.createdBy;
 
-    await createNotification({
+    queueNotification({
       user: recipient,
       task: task._id,
       type: "taskCompleted",
-      message: `Task "${task.title}" has been completed.`,
+      message:
+        `Task "${task.title}" has been completed.`,
     });
-
-    console.log("Completion notification created");
   });
 });
 
@@ -87,7 +124,7 @@ taskEventEmitter.on("taskUpdated", (data) => {
       newPriority,
     } = data.details || {};
 
-    // Ignore updates without a priority change.
+    // Ignore updates without priority changes.
     if (
       previousPriority === undefined ||
       newPriority === undefined ||
@@ -96,13 +133,16 @@ taskEventEmitter.on("taskUpdated", (data) => {
       return;
     }
 
-    const task = await Task.findById(data.taskId);
+    const task = await Task.findById(
+      data.taskId
+    );
 
     if (!task) return;
 
-    const recipient = task.assignedTo || task.createdBy;
+    const recipient =
+      task.assignedTo || task.createdBy;
 
-    await createNotification({
+    queueNotification({
       user: recipient,
       task: task._id,
       type: "priorityChanged",
@@ -110,7 +150,13 @@ taskEventEmitter.on("taskUpdated", (data) => {
         `Task "${task.title}" priority changed ` +
         `from ${previousPriority} to ${newPriority}.`,
     });
-
-    console.log("Priority notification created");
   });
 });
+
+// ==========================================
+// EXPORTS
+// ==========================================
+
+module.exports = {
+  queueNotification,
+};
