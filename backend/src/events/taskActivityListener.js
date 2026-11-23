@@ -1,21 +1,54 @@
+
 const taskEventEmitter = require("./taskEventEmitter");
-const TaskActivity = require("../models/taskActivityModel");
 
-const saveTaskActivity = async (eventType, data) => {
+const {
+  jobQueue,
+  JOB_TYPES,
+} = require("../queues/jobQueue");
+
+// ==========================================
+// QUEUE TASK ACTIVITY
+// ==========================================
+
+const saveTaskActivity = async (
+  eventType,
+  data
+) => {
   try {
-    const activity = await TaskActivity.create({
-      task: data.taskId,
-      eventType,
-      performedBy: data.performedBy,
-      details: data.details || {},
-    });
+    if (!data?.taskId || !data?.performedBy) {
+      throw new Error(
+        "Task ID and performedBy are required"
+      );
+    }
 
-    console.log(`Activity saved: ${eventType}`);
-    return activity;
+    const job = jobQueue.enqueue(
+      JOB_TYPES.ACTIVITY_LOG,
+      {
+        task: String(data.taskId),
+        eventType,
+        performedBy: String(data.performedBy),
+        details: data.details || {},
+      },
+      String(data.performedBy)
+    );
+
+    console.log(
+      `[Activity Listener] ${eventType} queued: ${job.id}`
+    );
+
+    return job;
+
   } catch (error) {
-    console.error(`Failed to save ${eventType} activity:`, error.message);
+    console.error(
+      `Failed to queue ${eventType} activity:`,
+      error.message
+    );
   }
 };
+
+// ==========================================
+// SUPPORTED TASK EVENTS
+// ==========================================
 
 const eventTypes = [
   "taskCreated",
@@ -24,10 +57,20 @@ const eventTypes = [
   "taskCompleted",
 ];
 
+// ==========================================
+// REGISTER EVENT LISTENERS
+// ==========================================
+
 eventTypes.forEach((eventType) => {
   taskEventEmitter.on(eventType, (data) => {
     void saveTaskActivity(eventType, data);
   });
 });
 
-module.exports = { saveTaskActivity };
+// ==========================================
+// EXPORTS
+// ==========================================
+
+module.exports = {
+  saveTaskActivity,
+};
