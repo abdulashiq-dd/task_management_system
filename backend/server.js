@@ -7,18 +7,16 @@ const app = require("./src/app");
 
 const connectDB = require("./src/config/db");
 
-const Notification = require(
-  "./src/models/notificationModel"
-);
+const Notification = require("./src/models/notificationModel");
+
+const TaskActivity = require("./src/models/taskActivityModel");
 
 const {
   startReminderJob,
   stopReminderJob,
 } = require("./src/jobs/reminderJob");
 
-const {
-  jobWorker,
-} = require("./src/workers/jobWorker");
+const { jobWorker } = require("./src/workers/jobWorker");
 
 // ==========================================
 // SERVER CONFIGURATION
@@ -38,42 +36,44 @@ async function startServer() {
     // 1. Connect to MongoDB.
     await connectDB();
 
-    // 2. Initialize notification indexes.
-    await Notification.init();
+    // 2. Initialize database models.
+    await Promise.all([
+      Notification.init(),
+      TaskActivity.init(),
+    ]);
 
-    await Notification.createIndexes();
+    // 3. Create database indexes.
+    await Promise.all([
+      Notification.createIndexes(),
+      TaskActivity.createIndexes(),
+    ]);
 
-    console.log(
-      "Notification indexes initialized"
-    );
+    console.log("Notification indexes initialized");
 
-    // 3. Start Express server.
+    console.log("Task activity indexes initialized");
+
+    console.log("Background job idempotency indexes initialized");
+
+    // 4. Start Express server.
     server = app.listen(PORT, () => {
-      console.log(
-        `Server running on http://localhost:${PORT}`
-      );
+      console.log(`Server running on http://localhost:${PORT}`);
 
-      // 4. Start Milestone 7 reminder scheduler.
+      // 5. Start Milestone 7 reminder scheduler.
       startReminderJob();
 
-      // 5. Start Milestone 8 background worker.
+      // 6. Start background worker.
+      // Milestone 8: Background processing.
+      // Milestone 9: Retry and failure handling.
       jobWorker.start();
     });
 
     server.on("error", (error) => {
-      console.error(
-        "HTTP server error:",
-        error.message
-      );
+      console.error("HTTP server error:", error.message);
 
       void shutdown("SERVER_ERROR", 1);
     });
-
   } catch (error) {
-    console.error(
-      "Server startup failed:",
-      error.message
-    );
+    console.error("Server startup failed:", error.message);
 
     await shutdown("STARTUP_ERROR", 1);
   }
@@ -83,10 +83,7 @@ async function startServer() {
 // GRACEFUL SHUTDOWN
 // ==========================================
 
-async function shutdown(
-  signal,
-  exitCode = 0
-) {
+async function shutdown(signal, exitCode = 0) {
   if (isShuttingDown) {
     return;
   }
@@ -95,15 +92,11 @@ async function shutdown(
 
   console.log(`\n${signal} received`);
 
-  console.log(
-    "Starting graceful shutdown..."
-  );
+  console.log("Starting graceful shutdown...");
 
   // Prevent indefinite shutdown.
   const forceExitTimer = setTimeout(() => {
-    console.error(
-      "Graceful shutdown timed out"
-    );
+    console.error("Graceful shutdown timed out");
 
     process.exit(1);
   }, 30000);
@@ -136,17 +129,12 @@ async function shutdown(
 
     console.log("MongoDB disconnected");
 
-    console.log(
-      "Graceful shutdown completed"
-    );
+    console.log("Graceful shutdown completed");
 
     process.exitCode = exitCode;
 
   } catch (error) {
-    console.error(
-      "Shutdown error:",
-      error.message
-    );
+    console.error("Shutdown error:", error.message);
 
     process.exitCode = 1;
 

@@ -1,9 +1,14 @@
 
 const mongoose = require("mongoose");
+
 const Notification = require("../models/notificationModel");
 
+const {
+  createIdempotent,
+} = require("../utils/idempotentWrite");
+
 // ==========================================
-// HELPER — ERROR HANDLING
+// HELPER - ERROR HANDLING
 // ==========================================
 
 const createError = (message, statusCode) => {
@@ -21,7 +26,9 @@ const createNotification = async ({
   task,
   type,
   message,
+  backgroundJobId,
 }) => {
+
   if (!user || !task || !type || !message) {
     throw createError(
       "Notification details are required",
@@ -39,15 +46,28 @@ const createNotification = async ({
     );
   }
 
-  const notification = await Notification.create({
+  const notificationData = {
     user,
     task,
     type,
     message,
     isRead: false,
-  });
+  };
 
-  return notification;
+  // Milestone 9: Idempotent background writes.
+
+  if (backgroundJobId !== undefined) {
+
+    return createIdempotent(
+      Notification,
+      backgroundJobId,
+      notificationData
+    );
+  }
+
+  // Preserve existing notification creation.
+
+  return Notification.create(notificationData);
 };
 
 // ==========================================
@@ -55,6 +75,7 @@ const createNotification = async ({
 // ==========================================
 
 const getUserNotifications = async (userId) => {
+
   if (!mongoose.isValidObjectId(userId)) {
     throw createError("Invalid user ID", 400);
   }
@@ -74,6 +95,7 @@ const markNotificationAsRead = async (
   notificationId,
   userId
 ) => {
+
   if (!mongoose.isValidObjectId(notificationId)) {
     throw createError(
       "Invalid notification ID",
@@ -111,6 +133,7 @@ const markNotificationAsRead = async (
 // ==========================================
 
 const markAllNotificationsAsRead = async (userId) => {
+
   if (!mongoose.isValidObjectId(userId)) {
     throw createError("Invalid user ID", 400);
   }

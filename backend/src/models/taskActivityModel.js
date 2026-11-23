@@ -1,5 +1,4 @@
 
-
 const mongoose = require("mongoose");
 
 const taskActivitySchema = new mongoose.Schema(
@@ -32,9 +31,29 @@ const taskActivitySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+
+    // Milestone 9: Prevent duplicate activity logs.
+    backgroundJobId: {
+      type: String,
+      trim: true,
+      immutable: true,
+    },
   },
   {
     timestamps: true,
+  }
+);
+
+// Prevent duplicate activity logs when a job is retried.
+taskActivitySchema.index(
+  {
+    backgroundJobId: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      backgroundJobId: { $type: "string" },
+    },
   }
 );
 
