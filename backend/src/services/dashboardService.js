@@ -80,26 +80,23 @@ const getPendingTasks = async (filter) => {
 // ==========================================
 
 const getOverdueTasks = async (filter) => {
-  // Beginning of today in UTC.
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const now = new Date();
 
   return Task.countDocuments({
     $and: [
       filter,
       {
-        dueDate: {
-          $lt: today,
-          $ne: null,
-        },
         status: {
-          $ne: "completed",
+          $in: ["pending", "in_progress"],
+        },
+        dueDate: {
+          $ne: null,
+          $lte: now,
         },
       },
     ],
   });
 };
-
 // ==========================================
 // 5. TASKS BY PRIORITY
 // ==========================================
