@@ -1,7 +1,7 @@
-const logger = require("../utils/logger");
+const { forwardApiError } = require("../middleware/errorMiddleware");
 const dashboardService = require("../services/dashboardService");
 
-const getDashboard = async (req, res) => {
+const getDashboard = async (req, res, next) => {
   try {
     const dashboard = await dashboardService.getDashboardStats({
       id: req.user.id,
@@ -14,12 +14,7 @@ const getDashboard = async (req, res) => {
       dashboard,
     });
   } catch (error) {
-    logger.error("Dashboard Error", error);
-
-    return res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.statusCode >= 400 && error.statusCode < 500 ? error.message : "Failed to fetch dashboard",
-    });
+    return forwardApiError(error, res, next);
   }
 };
 

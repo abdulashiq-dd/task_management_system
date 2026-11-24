@@ -1,3 +1,4 @@
+const { createError } = require("../utils/httpError");
 const logger = require("../utils/logger");
 
 const mongoose = require("mongoose");
@@ -400,13 +401,7 @@ async function queueExportJob(
 
   if (!Object.values(FILE_TYPES).includes(type)) {
 
-    const error = new Error(
-      "Invalid export type"
-    );
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Invalid export type", 400);
 
   }
 
@@ -427,13 +422,7 @@ async function queueExportJob(
 
   ) {
 
-    const error = new Error(
-      "Task summary reports do not support filters"
-    );
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Task summary reports do not support filters", 400);
 
   }
 

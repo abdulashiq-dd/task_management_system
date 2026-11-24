@@ -11,7 +11,8 @@ const {
 } = require("./jobHandlers");
 
 const {
-  isRetryableError
+  isRetryableError,
+  JobTimeoutError
 } = require("../utils/jobErrors");
 
 const {
@@ -30,7 +31,22 @@ const DEFAULT_POLL_INTERVAL_MS = 500;
 // BACKGROUND WORKER CLASS
 // ==========================================
 
-class JobWorker {
+class QueueWorker {
+  #stats;
+  #inFlightJobs;
+  #activeJobs;
+  #isRunning;
+  #isStopping;
+  #intervalHandle;
+  #pollPromise;
+  #stopPromise;
+
+  get isRunning() { return this.#isRunning; }
+  get isStopping() { return this.#isStopping; }
+  get activeJobs() { return this.#activeJobs; }
+  // Return a snapshot rather than exposing the mutable internal Set.
+  get inFlightJobs() { return new Set(this.#inFlightJobs); }
+
 
   constructor({
     queue = jobQueue,
@@ -66,28 +82,30 @@ class JobWorker {
       );
     }
 
+    // Timer callbacks otherwise lose their receiving object.
+    this.processQueue = this.processQueue.bind(this);
     this.queue = queue;
     this.handler = handler;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new Error("Invalid job timeout");
     this.timeoutMs = timeoutMs;
-    this.pollPromise = null;
+    this.#pollPromise = null;
 
     this.concurrency = concurrency;
     this.pollIntervalMs = pollIntervalMs;
 
-    this.isRunning = false;
-    this.isStopping = false;
+    this.#isRunning = false;
+    this.#isStopping = false;
 
-    this.activeJobs = 0;
+    this.#activeJobs = 0;
 
-    this.intervalHandle = null;
-    this.stopPromise = null;
+    this.#intervalHandle = null;
+    this.#stopPromise = null;
 
-    this.inFlightJobs = new Set();
+    this.#inFlightJobs = new Set();
 
     // Worker statistics.
 
-    this.stats = {
+    this.#stats = {
 
       totalProcessed: 0,
       completed: 0,
@@ -113,7 +131,7 @@ class JobWorker {
 
   start() {
 
-    if (this.isRunning || this.isStopping) {
+    if (this.#isRunning || this.#isStopping) {
 
       logger.info("[Job Worker] Worker already running or stopping");
 
@@ -121,7 +139,7 @@ class JobWorker {
 
     }
 
-    this.isRunning = true;
+    this.#isRunning = true;
 
     logger.info("[Job Worker] Worker started");
 
@@ -129,11 +147,7 @@ class JobWorker {
 
     logger.info("[Job Worker] Poll interval: [redacted] ms");
 
-    this.intervalHandle = setInterval(() => {
-
-      this.processQueue();
-
-    }, this.pollIntervalMs);
+    this.#intervalHandle = setInterval(this.processQueue, this.pollIntervalMs);
 
     // Immediately check available jobs.
 
@@ -148,21 +162,21 @@ class JobWorker {
   // ========================================
 
   processQueue() {
-    if (!this.isRunning || this.isStopping || this.pollPromise) return;
-    this.pollPromise = this.pollQueue().catch(error => {
+    if (!this.#isRunning || this.#isStopping || this.#pollPromise) return;
+    this.#pollPromise = this.pollQueue().catch(error => {
       logger.error("[Job Worker] Poll failed", error);
       if (this.queue.persistent) process.exit(1);
-    }).finally(() => { this.pollPromise = null; });
+    }).finally(() => { this.#pollPromise = null; });
   }
 
   async pollQueue() {
 
-    if (!this.isRunning || this.isStopping) {
+    if (!this.#isRunning || this.#isStopping) {
       return;
     }
 
     while (
-      this.isRunning && !this.isStopping && this.activeJobs < this.concurrency
+      this.#isRunning && !this.#isStopping && this.#activeJobs < this.concurrency
     ) {
 
       // Retrieve next available job.
@@ -175,11 +189,11 @@ class JobWorker {
 
       // Reserve worker execution slot.
 
-      this.activeJobs++;
+      this.#activeJobs++;
 
-      this.stats.maxConcurrentJobs = Math.max(
-        this.stats.maxConcurrentJobs,
-        this.activeJobs
+      this.#stats.maxConcurrentJobs = Math.max(
+        this.#stats.maxConcurrentJobs,
+        this.#activeJobs
       );
 
       // Track complete asynchronous lifecycle.
@@ -222,11 +236,11 @@ class JobWorker {
               failedJob?.status === JOB_STATUS.FAILED
             ) {
 
-              this.stats.failed++;
+              this.#stats.failed++;
 
-              this.stats.permanentlyFailed++;
+              this.#stats.permanentlyFailed++;
 
-              this.stats.totalProcessed++;
+              this.#stats.totalProcessed++;
 
             }
 
@@ -243,28 +257,24 @@ class JobWorker {
 
           // Release slot after every attempt.
 
-          this.activeJobs--;
+          this.#activeJobs--;
 
-          this.inFlightJobs.delete(
+          this.#inFlightJobs.delete(
             jobPromise
           );
 
           if (
-            this.isRunning &&
-            !this.isStopping
+            this.#isRunning &&
+            !this.#isStopping
           ) {
 
-            setImmediate(() => {
-
-              this.processQueue();
-
-            });
+            setImmediate(this.processQueue);
 
           }
 
         });
 
-      this.inFlightJobs.add(jobPromise);
+      this.#inFlightJobs.add(jobPromise);
 
     }
 
@@ -329,11 +339,11 @@ class JobWorker {
 
     logger.info("[Job Worker] Attempt [redacted]/[redacted]");
 
-    this.stats.totalAttempts++;
+    this.#stats.totalAttempts++;
 
     if (job.attempts > 1) {
 
-      this.stats.retryAttempts++;
+      this.#stats.retryAttempts++;
 
     }
 
@@ -347,7 +357,7 @@ class JobWorker {
 
     } catch (error) {
 
-      this.stats.failedAttempts++;
+      this.#stats.failedAttempts++;
 
       // Determine if the failure is temporary.
 
@@ -429,7 +439,7 @@ class JobWorker {
         updatedJob.status === JOB_STATUS.RETRYING
       ) {
 
-        this.stats.retriesScheduled++;
+        this.#stats.retriesScheduled++;
 
         logger.info("[Job Worker] Retry scheduled: [redacted]");
 
@@ -450,11 +460,11 @@ class JobWorker {
         updatedJob.status === JOB_STATUS.FAILED
       ) {
 
-        this.stats.failed++;
+        this.#stats.failed++;
 
-        this.stats.permanentlyFailed++;
+        this.#stats.permanentlyFailed++;
 
-        this.stats.totalProcessed++;
+        this.#stats.totalProcessed++;
 
         logger.error("[Job Worker] Job permanently failed: [redacted]");
 
@@ -485,15 +495,15 @@ class JobWorker {
 
     }
 
-    this.stats.completed++;
+    this.#stats.completed++;
 
-    this.stats.totalProcessed++;
+    this.#stats.totalProcessed++;
 
     // Track recovery after retry.
 
     if (job.attempts > 1) {
 
-      this.stats.recovered++;
+      this.#stats.recovered++;
 
       logger.info("[Job Worker] Job recovered after retry: [redacted]");
 
@@ -520,10 +530,7 @@ class JobWorker {
             logger.error("[Job Worker] Deadline exceeded; supervisor restart required");
             process.exit(1);
           }
-          const error = new Error("Job execution deadline exceeded");
-          error.name = "JobTimeoutError";
-          error.retryable = false;
-          reject(error);
+          reject(new JobTimeoutError());
         }, this.timeoutMs); }),
       ]);
     } finally { clearTimeout(timer); }
@@ -533,19 +540,19 @@ class JobWorker {
 
     return {
 
-      isRunning: this.isRunning,
+      isRunning: this.#isRunning,
 
-      isStopping: this.isStopping,
+      isStopping: this.#isStopping,
 
       concurrency: this.concurrency,
 
-      activeJobs: this.activeJobs,
+      activeJobs: this.#activeJobs,
 
       availableSlots: Math.max(
 
         0,
 
-        this.concurrency - this.activeJobs
+        this.concurrency - this.#activeJobs
 
       ),
 
@@ -553,7 +560,7 @@ class JobWorker {
 
       delayedJobs: this.queue.persistent ? null : this.queue.getDelayedCount(),
 
-      ...this.stats
+      ...this.#stats
 
     };
 
@@ -565,49 +572,49 @@ class JobWorker {
 
   async stop() {
 
-    if (this.stopPromise) {
+    if (this.#stopPromise) {
 
-      return this.stopPromise;
+      return this.#stopPromise;
 
     }
 
     if (
-      !this.isRunning &&
-      !this.isStopping
+      !this.#isRunning &&
+      !this.#isStopping
     ) {
 
       return;
 
     }
 
-    this.isStopping = true;
+    this.#isStopping = true;
 
-    this.isRunning = false;
+    this.#isRunning = false;
 
-    if (this.intervalHandle) {
+    if (this.#intervalHandle) {
 
       clearInterval(
-        this.intervalHandle
+        this.#intervalHandle
       );
 
-      this.intervalHandle = null;
+      this.#intervalHandle = null;
 
     }
 
     logger.info("[Job Worker] Waiting for active jobs to finish...");
 
-    this.stopPromise =
+    this.#stopPromise =
       this.finishStopping();
 
     try {
 
-      await this.stopPromise;
+      await this.#stopPromise;
 
     } finally {
 
-      this.stopPromise = null;
+      this.#stopPromise = null;
 
-      this.isStopping = false;
+      this.#isStopping = false;
 
     }
 
@@ -620,12 +627,12 @@ class JobWorker {
   async finishStopping() {
 
     // Wait for any in-progress claim before collecting active promises.
-    await this.pollPromise;
+    await this.#pollPromise;
     // Wait for all active jobs to settle.
 
     await Promise.allSettled(
 
-      Array.from(this.inFlightJobs)
+      Array.from(this.#inFlightJobs)
 
     );
 
@@ -643,7 +650,7 @@ class JobWorker {
 // SHARED WORKER INSTANCE
 // ==========================================
 
-const jobWorker = new JobWorker({
+const jobWorker = new QueueWorker({
 
   concurrency: DEFAULT_CONCURRENCY,
 
@@ -657,7 +664,8 @@ const jobWorker = new JobWorker({
 
 module.exports = {
 
-  JobWorker,
+  QueueWorker,
+  JobWorker: QueueWorker, // Backward-compatible name for existing consumers.
 
   jobWorker
 

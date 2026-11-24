@@ -1,4 +1,6 @@
+const { createError } = require("../utils/httpError");
 const logger = require("../utils/logger");
+const { forwardApiError } = require("../middleware/errorMiddleware");
 
 const {
   queueExportJob
@@ -28,34 +30,6 @@ function getCurrentUser(req) {
 }
 
 // ==========================================
-// 2. HANDLE CONTROLLER ERRORS
-// ==========================================
-
-function handleError(error, res) {
-
-  const statusCode =
-    Number.isInteger(error.statusCode) &&
-    error.statusCode >= 400 &&
-    error.statusCode <= 599
-      ? error.statusCode
-      : 500;
-
-  logger.error("[Export Controller] Error", error);
-
-  return res.status(statusCode).json({
-
-    success: false,
-
-    message:
-      statusCode >= 500 && statusCode !== 503
-        ? "Internal server error"
-        : error.message
-
-  });
-
-}
-
-// ==========================================
 // 3. VALIDATE EXPORT REQUEST BODY
 // ==========================================
 
@@ -67,13 +41,7 @@ function getFilters(body = {}) {
     Array.isArray(body)
   ) {
 
-    const error = new Error(
-      "Invalid export request"
-    );
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Invalid export request", 400);
 
   }
 
@@ -84,13 +52,7 @@ function getFilters(body = {}) {
 
   if (unsupportedFields.length > 0) {
 
-    const error = new Error(
-      "Only the filters field is supported"
-    );
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Only the filters field is supported", 400);
 
   }
 
@@ -105,13 +67,7 @@ function getFilters(body = {}) {
     Array.isArray(filters)
   ) {
 
-    const error = new Error(
-      "Filters must be an object"
-    );
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Filters must be an object", 400);
 
   }
 
@@ -123,7 +79,7 @@ function getFilters(body = {}) {
 // 4. COMMON EXPORT CONTROLLER
 // ==========================================
 
-async function queueExport(req, res, type) {
+async function queueExport(req, res, next, type) {
 
   try {
 
@@ -158,7 +114,7 @@ async function queueExport(req, res, type) {
 
   } catch (error) {
 
-    return handleError(error, res);
+    return forwardApiError(error, res, next);
 
   }
 
@@ -168,11 +124,12 @@ async function queueExport(req, res, type) {
 // 5. JSON EXPORT
 // ==========================================
 
-async function exportJSON(req, res) {
+async function exportJSON(req, res, next) {
 
   return queueExport(
     req,
     res,
+    next,
     FILE_TYPES.JSON
   );
 
@@ -182,11 +139,12 @@ async function exportJSON(req, res) {
 // 6. CSV EXPORT
 // ==========================================
 
-async function exportCSV(req, res) {
+async function exportCSV(req, res, next) {
 
   return queueExport(
     req,
     res,
+    next,
     FILE_TYPES.CSV
   );
 
@@ -197,7 +155,7 @@ async function exportCSV(req, res) {
 // GET /api/exports
 // ==========================================
 
-async function listExports(req, res) {
+async function listExports(req, res, next) {
 
   try {
 
@@ -225,7 +183,7 @@ async function listExports(req, res) {
 
   } catch (error) {
 
-    return handleError(error, res);
+    return forwardApiError(error, res, next);
 
   }
 
@@ -236,7 +194,7 @@ async function listExports(req, res) {
 // GET /api/exports/:id
 // ==========================================
 
-async function getExport(req, res) {
+async function getExport(req, res, next) {
 
   try {
 
@@ -262,7 +220,7 @@ async function getExport(req, res) {
 
   } catch (error) {
 
-    return handleError(error, res);
+    return forwardApiError(error, res, next);
 
   }
 
@@ -333,17 +291,11 @@ async function downloadExport(req, res, next) {
           error.status === 404
         ) {
 
-          return res.status(404).json({
-
-            success: false,
-
-            message: "Export file not found"
-
-          });
+          return forwardApiError(createError("Export file not found", 404), res, next);
 
         }
 
-        return handleError(error, res);
+        return forwardApiError(error, res, next);
 
       }
 
@@ -351,7 +303,7 @@ async function downloadExport(req, res, next) {
 
   } catch (error) {
 
-    return handleError(error, res);
+    return forwardApiError(error, res, next);
 
   }
 

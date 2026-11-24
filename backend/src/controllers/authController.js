@@ -1,3 +1,4 @@
+const { createError } = require("../utils/httpError");
 
 const authService = require("../services/authService");
 
@@ -14,9 +15,7 @@ const register = async (req, res, next) => {
       password.length < 8 ||
       Buffer.byteLength(password, "utf8") > 72
     ) {
-      return res.status(400).json({
-        message: "Valid name, email and password (8–72 bytes) are required"
-      });
+      throw createError("Valid name, email and password (8–72 bytes) are required", 400);
     }
 
     const user = await authService.registerUser({
@@ -45,9 +44,7 @@ const login = async (req, res, next) => {
       typeof password !== "string" ||
       !password || Buffer.byteLength(password, "utf8") > 72
     ) {
-      return res.status(400).json({
-        message: "Email and a password of at most 72 bytes are required"
-      });
+      throw createError("Email and a password of at most 72 bytes are required", 400);
     }
 
     const result = await authService.loginUser({

@@ -17,7 +17,12 @@ function run(file, args = []) {
 }
 async function main() {
   const unitOnly = process.argv.includes("--unit"), integrationOnly = process.argv.includes("--integration");
-  if (!integrationOnly) { run("test/hardening.unit.test.js"); for (const name of units) run(`test/legacy/${name}.js`); }
+  if (!integrationOnly) {
+    run("test/hardening.unit.test.js");
+    run("test/milestone12.errors.test.js");
+    run("test/milestone11.services.test.js");
+    for (const name of units) run(`test/legacy/${name}.js`);
+  }
   if (!unitOnly) {
     const mongoose = require("mongoose");
     const bcrypt = require("bcrypt");
@@ -40,6 +45,7 @@ async function main() {
       await Task.create([{ title: "Fixture admin task", createdBy: admin._id }, { title: "Fixture assigned task", createdBy: admin._id, assignedTo: user._id }, { title: "Fixture user task", createdBy: user._id }]);
       for (const name of integration) run(`test/legacy/${name}.js`);
       run("test/hardening.integration.test.js");
+      run("test/milestone12.api.test.js");
     } finally {
       if (mongoose.connection.readyState === 1 && mongoose.connection.name === db && db.startsWith("task_hardening_test_")) await mongoose.connection.dropDatabase();
       await mongoose.disconnect();

@@ -1,3 +1,4 @@
+const { createError } = require("../utils/httpError");
 const logger = require("../utils/logger");
 
 const fs = require("node:fs/promises");
@@ -38,11 +39,7 @@ function validateFileType(type) {
 
   if (!Object.hasOwn(STORAGE_DIRECTORIES, type)) {
 
-    const error = new Error("Invalid export file type");
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Invalid export file type", 400);
 
   }
 
@@ -114,11 +111,7 @@ function validateFileName(fileName, type) {
 
   ) {
 
-    const error = new Error("Invalid file name");
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Invalid file name", 400);
 
   }
 
@@ -128,11 +121,7 @@ function validateFileName(fileName, type) {
 
   ) {
 
-    const error = new Error("Invalid file extension");
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Invalid file extension", 400);
 
   }
 
@@ -167,11 +156,7 @@ function getFilePath(type, fileName) {
 
   ) {
 
-    const error = new Error("Unsafe file path");
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Unsafe file path", 400);
 
   }
 
@@ -235,11 +220,7 @@ async function getFileMetadata(type, fileName) {
 
   if (!stats.isFile()) {
 
-    const error = new Error("Invalid file");
-
-    error.statusCode = 400;
-
-    throw error;
+    throw createError("Invalid file", 400);
 
   }
 

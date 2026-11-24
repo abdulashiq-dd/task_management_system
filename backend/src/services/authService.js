@@ -1,3 +1,4 @@
+const { createError } = require("../utils/httpError");
 
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -14,9 +15,7 @@ const registerUser = async ({ name, email, password }) => {
   });
 
   if (existingUser) {
-    const error = new Error("Email already registered");
-    error.statusCode = 409;
-    throw error;
+    throw createError("Email already registered", 409);
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
@@ -37,9 +36,7 @@ const registerUser = async ({ name, email, password }) => {
     };
   } catch (error) {
     if (error.code === 11000) {
-      const duplicateError = new Error("Email already registered");
-      duplicateError.statusCode = 409;
-      throw duplicateError;
+      throw createError("Email already registered", 409);
     }
 
     throw error;
@@ -57,9 +54,7 @@ const loginUser = async ({ email, password }) => {
 
   const isPasswordValid = await bcrypt.compare(password, user?.password || DUMMY_HASH);
   if (!user || !isPasswordValid) {
-    const error = new Error("Invalid email or password");
-    error.statusCode = 401;
-    throw error;
+    throw createError("Invalid email or password", 401);
   }
 
   if (!process.env.JWT_SECRET) {

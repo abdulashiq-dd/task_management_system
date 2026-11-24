@@ -81,3 +81,8 @@ The read-only verification reports index definitions and sample `explain('execut
 No high-availability claim: a single process with synchronized clock, a Mongo lease and local/shared-to-that-process export storage is the supported topology. Protect MongoDB credentials, use network restrictions/TLS, set log access controls, enforce OS file permissions, configure backups and supervisor-driven restarts. Local rate limits do not cover distributed clients. Upgrades/rollbacks should occur offline; snapshots and job records created by the hardened version are not compatible with the old in-memory worker. Historical export files remain on disk; use a separately approved retention process.
 
 See `docs/HARDENING_FINDINGS.md` for the 38-item resolution tracker and `docs/VALIDATION.md` for the executed versus pending checks.
+
+
+## Milestones 11 and 12
+
+The class-based `TaskService`, `NotificationService` and `QueueWorker` retain the existing module and API paths. Custom application and queue errors feed a centralized HTTP error normalizer; workers retain independent retry/failure handling. Run `node learning-examples/classServiceDesign.js` for the callback review checkpoint, and `npm test` for all 22 suites. See `docs/MILESTONES_11_12.md` and `docs/VALIDATION_M11_M12.md` for implementation details and actual validation status.
