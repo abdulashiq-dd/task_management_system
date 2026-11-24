@@ -7,7 +7,6 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
 
     task: {
@@ -65,6 +64,7 @@ const notificationSchema = new mongoose.Schema(
 notificationSchema.index({
   user: 1,
   createdAt: -1,
+  _id: -1,
 });
 
 // Milestone 7: Prevent duplicate scheduled notifications.
@@ -93,6 +93,11 @@ notificationSchema.index(
   }
 );
 
+// Retention is opt-in; avoid deleting historical reminders without an agreed policy.
+const retentionDays = Number(process.env.NOTIFICATION_RETENTION_DAYS || 0);
+if (Number.isSafeInteger(retentionDays) && retentionDays > 0 && retentionDays <= 36500) {
+  notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: retentionDays * 86400 });
+}
 module.exports = mongoose.model(
   "Notification",
   notificationSchema

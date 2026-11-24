@@ -1,5 +1,7 @@
+const logger = require("../utils/logger");
 
 const mongoose = require("mongoose");
+const { runtimeUser } = require("../utils/runtimeUser");
 const fs = require("node:fs/promises");
 const { randomUUID } = require("node:crypto");
 
@@ -13,7 +15,8 @@ const {
   FILE_TYPES,
   fileExists,
   getFilePath,
-  generateFileName
+  generateFileName,
+  deleteFile
 } = require("../config/fileStorage");
 
 const {
@@ -76,6 +79,7 @@ function formatExportResult(record) {
     size: record.size,
 
     totalRecords: record.totalRecords,
+    generatedRole: record.generatedRole,
 
     status: record.status,
 
@@ -129,7 +133,7 @@ function validateExportJob(job, expectedType) {
 
   // Validate authenticated user.
 
-  buildExportFilter(currentUser);
+  if (!mongoose.isObjectIdOrHexString(currentUser?.id)) throw new NonRetryableError("Invalid job owner");
 
   // Verify job ownership.
 
@@ -207,8 +211,8 @@ async function processExportJob(
 
   const {
     exportId,
-    currentUser
   } = job.payload;
+  const currentUser = await runtimeUser(job.userId);
 
   const record = await Export.findById(
     exportId
@@ -248,11 +252,9 @@ async function processExportJob(
     record.status === EXPORT_STATUS.COMPLETED
   ) {
 
-    console.log(
-      "[Export Job] Reusing completed export:",
-      exportId
-    );
+    logger.info("[Export Job] Reusing completed export");
 
+    if (currentUser.role !== "admin" && record.generatedRole !== "user") throw new NonRetryableError("Existing export scope is no longer authorized");
     return restoreCompletedResult(record);
 
   }
@@ -279,11 +281,7 @@ async function processExportJob(
 
   await record.save();
 
-  console.log(
-    "[Export Job] Processing:",
-    record.type,
-    job.id
-  );
+  logger.info("[Export Job] Processing");
 
   // Convert Mongoose filters to a plain object.
 
@@ -341,6 +339,15 @@ async function processExportJob(
 
   }
 
+  // Demotion/deletion during generation must not publish a privileged artifact.
+  try {
+    const refreshed = await runtimeUser(currentUser.id);
+    if (currentUser.role === "admin" && refreshed.role !== "admin") throw new NonRetryableError("Export authorization changed during generation");
+  } catch (error) {
+    await deleteFile(record.type, record.fileName);
+    throw error;
+  }
+  record.generatedRole = currentUser.role;
   // Persist successful file generation.
 
   record.size = generatedFile.size;
@@ -358,10 +365,7 @@ async function processExportJob(
 
   await record.save();
 
-  console.log(
-    "[Export Job] Completed:",
-    record._id
-  );
+  logger.info("[Export Job] Completed");
 
   const result = formatExportResult(record);
 
@@ -466,9 +470,7 @@ async function queueExportJob(
 
     currentUser: {
 
-      id: String(currentUser.id),
-
-      role: currentUser.role
+      id: String(currentUser.id)
 
     }
 
@@ -488,7 +490,7 @@ async function queueExportJob(
 
     // Submit job using predefined background job ID.
 
-    job = queue.enqueue(
+    job = await queue.enqueue(
 
       EXPORT_JOB_TYPES[type],
 
@@ -521,10 +523,7 @@ async function queueExportJob(
 
     } catch (cleanupError) {
 
-      console.error(
-        "[Export Job] Submission cleanup failed:",
-        cleanupError.message
-      );
+      logger.error("[Export Job] Submission cleanup failed", cleanupError);
 
     }
 
@@ -532,10 +531,7 @@ async function queueExportJob(
 
   }
 
-  console.log(
-    "[Export Job] Queued:",
-    job.id
-  );
+  logger.info("[Export Job] Queued");
 
   // Return immediately after queue submission.
   // Do not wait for file generation.
@@ -674,10 +670,7 @@ async function updateExportFailure(
 
   if (updatedRecord) {
 
-    console.log(
-      "[Export Job] Metadata status updated:",
-      updatedRecord.status
-    );
+    logger.info("[Export Job] Metadata status updated");
 
   }
 

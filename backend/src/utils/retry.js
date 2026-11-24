@@ -1,3 +1,4 @@
+const logger = require("./logger");
 // ==========================================
 // RETRY UTILITY
 // MILESTONE 9 - RETRY AND FAILURE HANDLING
@@ -68,36 +69,25 @@ async function retry(fn, retries = 3, delay = 1000) {
 
     async function attempt(attemptNumber) {
 
-        console.log(
-            `[Retry] Attempt ${attemptNumber + 1} of ${retries + 1}`
-        );
+        logger.info("[Retry] Attempt [redacted] of [redacted]");
 
         try {
 
             const result = await fn();
 
-            console.log(
-                `[Retry] Attempt ${attemptNumber + 1} succeeded`
-            );
+            logger.info("[Retry] Attempt [redacted] succeeded");
 
             return result;
 
         } catch (error) {
 
-            console.error(
-                `[Retry] Attempt ${attemptNumber + 1} failed:`,
-                error instanceof Error
-                    ? error.message
-                    : String(error)
-            );
+            logger.error("[Retry] Attempt [redacted] failed", error);
 
             // All retries exhausted.
 
             if (attemptNumber >= retries) {
 
-                console.error(
-                    "[Retry] Maximum retry attempts exhausted"
-                );
+                logger.error("[Retry] Maximum retry attempts exhausted");
 
                 throw error;
             }
@@ -109,9 +99,7 @@ async function retry(fn, retries = 3, delay = 1000) {
                 attemptNumber + 1
             );
 
-            console.log(
-                `[Retry] Retrying after ${nextDelay} ms`
-            );
+            logger.info("[Retry] Retrying after [redacted] ms");
 
             await sleep(nextDelay);
 

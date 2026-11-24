@@ -1,28 +1,31 @@
 
 require("dotenv").config();
+if (!/\/task_hardening_test_[a-f0-9]{32}(?:\?|$)/.test(process.env.MONGO_URI || "")) throw new Error("Run database tests through npm test; an isolated database is required.");
+process.env.JOB_QUEUE_MODE = "mongo";
 
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
 const { randomUUID } = require("node:crypto");
 
-const app = require("../app");
+const app = require("../../src/app");
+const BackgroundJob = require("../../src/models/backgroundJobModel");
 
-const { jobWorker } = require("../workers/jobWorker");
+const { jobWorker } = require("../../src/workers/jobWorker");
 
 const {
   Export,
   EXPORT_STATUS,
   MIME_TYPES
-} = require("../models/exportModel");
+} = require("../../src/models/exportModel");
 
 const {
   FILE_TYPES,
   generateFileName,
   initializeFileStorage,
   deleteFile
-} = require("../config/fileStorage");
+} = require("../../src/config/fileStorage");
 
-const { sleep } = require("../utils/retry");
+const { sleep } = require("../../src/utils/retry");
 
 let server;
 let baseUrl;
@@ -200,6 +203,7 @@ async function runTests() {
 
     await mongoose.connect(process.env.MONGO_URI);
 
+    await BackgroundJob.createIndexes();
     await Export.init();
     await Export.createIndexes();
     await initializeFileStorage();
@@ -787,6 +791,7 @@ async function runTests() {
           }
         });
 
+        await BackgroundJob.deleteMany({ id: { $in: records.map(record => record.backgroundJobId) } });
         let filesRemoved = 0;
 
         for (const record of records) {

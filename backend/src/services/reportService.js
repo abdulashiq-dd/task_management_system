@@ -1,5 +1,6 @@
+const logger = require("../utils/logger");
 
-const mongoose = require("mongoose");
+const { validateUser } = require("../utils/taskAccess");
 
 const {
   queueExportJob
@@ -23,15 +24,7 @@ const REPORT_TYPES = Object.freeze({
 // 2. CREATE CUSTOM ERROR
 // ==========================================
 
-function createError(message, statusCode) {
-
-  const error = new Error(message);
-
-  error.statusCode = statusCode;
-
-  return error;
-
-}
+const { createError } = require("../utils/httpError");
 
 // ==========================================
 // 3. GENERATE DOWNLOADABLE REPORT
@@ -42,36 +35,7 @@ async function generateReport(
   currentUser
 ) {
 
-  // Validate authenticated user.
-
-  if (!currentUser || !currentUser.id) {
-
-    throw createError(
-      "Authentication required",
-      401
-    );
-
-  }
-
-  if (!mongoose.isValidObjectId(currentUser.id)) {
-
-    throw createError(
-      "Invalid user ID",
-      400
-    );
-
-  }
-
-  if (
-    !["user", "admin"].includes(currentUser.role)
-  ) {
-
-    throw createError(
-      "Invalid user role",
-      403
-    );
-
-  }
+  validateUser(currentUser);
 
   // Validate request data.
 
@@ -128,9 +92,7 @@ async function generateReport(
 
   );
 
-  console.log(
-    `[Report Service] Report queued: ${job.id}`
-  );
+  logger.info("[Report Service] Report queued: [redacted]");
 
   return {
 

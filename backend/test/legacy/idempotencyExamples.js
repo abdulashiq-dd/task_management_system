@@ -1,5 +1,6 @@
 
 require("dotenv").config();
+if (!/\/task_hardening_test_[a-f0-9]{32}(?:\?|$)/.test(process.env.MONGO_URI || "")) throw new Error("Run database tests through npm test; an isolated database is required.");
 
 const assert = require("node:assert/strict");
 
@@ -8,20 +9,20 @@ const mongoose = require("mongoose");
 const { randomUUID } = require("node:crypto");
 
 const Notification = require(
-  "../models/notificationModel"
+  "../../src/models/notificationModel"
 );
 
 const TaskActivity = require(
-  "../models/taskActivityModel"
+  "../../src/models/taskActivityModel"
 );
 
 const {
   executeJob,
-} = require("../workers/jobHandlers");
+} = require("../../src/workers/jobHandlers");
 
 const {
   JOB_TYPES,
-} = require("../queues/jobQueue");
+} = require("../../src/queues/jobQueue");
 
 // ==========================================
 // ISOLATED TEST CONFIGURATION
@@ -459,7 +460,7 @@ async function runTests() {
 
     console.log("MongoDB connected");
 
-    if (mongoose.connection.name !== "task_management") {
+    if (!/^task_hardening_test_[a-f0-9]{32}$/.test(mongoose.connection.name)) {
 
       throw new Error(
         "Unexpected test database"
@@ -512,7 +513,7 @@ async function runTests() {
 
       if (
         mongoose.connection.readyState === 1 &&
-        mongoose.connection.name === "task_management" &&
+        /^task_hardening_test_[a-f0-9]{32}$/.test(mongoose.connection.name) &&
         testJobIds.length > 0
       ) {
 

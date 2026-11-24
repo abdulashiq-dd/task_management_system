@@ -4,6 +4,7 @@ const User = require("../models/userModel");
 
 const authenticate = async (req, res, next) => {
   try {
+    if (!process.env.JWT_SECRET?.trim()) return next(Object.assign(new Error("JWT_SECRET is not configured"), { statusCode: 500 }));
     const authHeader = req.headers.authorization;
 
     if (
@@ -17,7 +18,7 @@ const authenticate = async (req, res, next) => {
 
     const token = authHeader.slice(7);
 
-    if (!token || !process.env.JWT_SECRET) {
+    if (!token) {
       return res.status(401).json({
         message: "Invalid or expired token"
       });

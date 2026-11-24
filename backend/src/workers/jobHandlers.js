@@ -1,5 +1,7 @@
+const logger = require("../utils/logger");
 
 const mongoose = require("mongoose");
+const { runtimeUser } = require("../utils/runtimeUser");
 
 const notificationService = require(
   "../services/notificationService"
@@ -25,9 +27,7 @@ const {
   NonRetryableError
 } = require("../utils/jobErrors");
 
-const {
-  sleep
-} = require("../utils/retry");
+
 
 const {
   processExportJob
@@ -41,7 +41,7 @@ const {
 // CONFIGURATION
 // ==========================================
 
-const REPORT_DELAY_MS = 5000;
+
 
 // ==========================================
 // 1. NOTIFICATION JOB HANDLER
@@ -63,8 +63,8 @@ async function handleNotificationJob(
   if (
     !mongoose.isValidObjectId(user) ||
     !mongoose.isValidObjectId(task) ||
-    !type ||
-    !message
+    typeof type !== "string" || !["taskAssigned", "taskCompleted", "priorityChanged", "taskReminder", "taskOverdue"].includes(type) ||
+    typeof message !== "string" || !message.trim() || message.length > 4096
   ) {
 
     throw new NonRetryableError(
@@ -84,9 +84,7 @@ async function handleNotificationJob(
 
   }
 
-  console.log(
-    "[Job Handler] Creating notification..."
-  );
+  logger.info("[Job Handler] Creating notification...");
 
   const notification =
     await notificationService.createNotification({
@@ -143,7 +141,7 @@ async function handleActivityLogJob(
 
     !mongoose.isValidObjectId(performedBy) ||
 
-    !eventType
+    typeof eventType !== "string" || !["taskCreated", "taskUpdated", "taskAssigned", "taskCompleted"].includes(eventType)
 
   ) {
 
@@ -153,9 +151,7 @@ async function handleActivityLogJob(
 
   }
 
-  console.log(
-    "[Job Handler] Creating activity log..."
-  );
+  logger.info("[Job Handler] Creating activity log...");
 
   const activity = await createIdempotent(
 
@@ -218,9 +214,7 @@ async function handleReportGenerationJob(
 
     !currentUser ||
 
-    !mongoose.isValidObjectId(currentUser.id) ||
-
-    !["user", "admin"].includes(currentUser.role)
+    !mongoose.isValidObjectId(currentUser.id)
 
   ) {
 
@@ -230,30 +224,25 @@ async function handleReportGenerationJob(
 
   }
 
-  console.log(
-    "[Job Handler] Generating task summary report..."
-  );
+  logger.info("[Job Handler] Generating task summary report...");
 
-  // Preserve existing simulated report delay.
-
-  await sleep(REPORT_DELAY_MS);
+  const authorizedUser = await runtimeUser(currentUser.id);
 
   const dashboard =
     await dashboardService.getDashboardStats({
 
-      id: currentUser.id,
+      id: authorizedUser.id,
 
-      role: currentUser.role
+      role: authorizedUser.role
 
     });
 
-  console.log(
-    "[Job Handler] Report generation completed"
-  );
+  logger.info("[Job Handler] Report generation completed");
 
   return {
 
     reportType,
+    generatedRole: authorizedUser.role,
 
     generatedAt: new Date().toISOString(),
 
@@ -278,9 +267,7 @@ async function handleReportGenerationJob(
 
 async function handleJSONExportJob(job) {
 
-  console.log(
-    "[Job Handler] Processing JSON export..."
-  );
+  logger.info("[Job Handler] Processing JSON export...");
 
   return processExportJob(
 
@@ -299,9 +286,7 @@ async function handleJSONExportJob(job) {
 
 async function handleCSVExportJob(job) {
 
-  console.log(
-    "[Job Handler] Processing CSV export..."
-  );
+  logger.info("[Job Handler] Processing CSV export...");
 
   return processExportJob(
 
@@ -330,9 +315,7 @@ async function handleReportExportJob(job) {
 
   }
 
-  console.log(
-    "[Job Handler] Processing downloadable report..."
-  );
+  logger.info("[Job Handler] Processing downloadable report...");
 
   return processExportJob(
 
@@ -435,9 +418,8 @@ async function executeJob(job) {
       // Preserve existing Milestone 8 and 9
       // report generation functionality.
 
-      return handleReportGenerationJob(
-        job.payload
-      );
+      if (String(job.userId) !== String(job.payload.currentUser?.id)) throw new NonRetryableError("Invalid job owner");
+      return handleReportGenerationJob(job.payload);
 
     // Unsupported job type.
 

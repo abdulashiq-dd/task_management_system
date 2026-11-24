@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 const dashboardService = require("../services/dashboardService");
 
 const getDashboard = async (req, res) => {
@@ -13,11 +14,11 @@ const getDashboard = async (req, res) => {
       dashboard,
     });
   } catch (error) {
-    console.error("Dashboard Error:", error);
+    logger.error("Dashboard Error", error);
 
     return res.status(error.statusCode || 500).json({
       success: false,
-      message: "Failed to fetch dashboard",
+      message: error.statusCode >= 400 && error.statusCode < 500 ? error.message : "Failed to fetch dashboard",
     });
   }
 };

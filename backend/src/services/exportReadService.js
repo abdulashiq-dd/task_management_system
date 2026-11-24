@@ -16,11 +16,7 @@ const {
 // 1. CUSTOM ERROR
 // ==========================================
 
-function createError(message, statusCode) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
+const { createError } = require("../utils/httpError");
 
 // ==========================================
 // 2. VALIDATE AUTHENTICATED USER
@@ -66,7 +62,8 @@ function buildAccessFilter(currentUser) {
   return {
     userId: new mongoose.Types.ObjectId(
       currentUser.id
-    )
+    ),
+    $or: [{ status: { $ne: EXPORT_STATUS.COMPLETED } }, { generatedRole: "user" }]
   };
 
 }

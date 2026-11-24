@@ -1,3 +1,4 @@
+const logger = require("./logger");
 
 const {
   NonRetryableError,
@@ -29,9 +30,7 @@ async function createIdempotent(
   });
 
   if (existingRecord) {
-    console.log(
-      `[Idempotency] Existing record found: ${backgroundJobId}`
-    );
+    logger.info("[Idempotency] Existing record found: [redacted]");
 
     return existingRecord;
   }
@@ -44,9 +43,7 @@ async function createIdempotent(
       backgroundJobId,
     });
 
-    console.log(
-      `[Idempotency] Record created: ${backgroundJobId}`
-    );
+    logger.info("[Idempotency] Record created: [redacted]");
 
     return record;
 
@@ -62,9 +59,7 @@ async function createIdempotent(
       });
 
       if (existingRecord) {
-        console.log(
-          `[Idempotency] Duplicate prevented: ${backgroundJobId}`
-        );
+        logger.info("[Idempotency] Duplicate prevented: [redacted]");
 
         return existingRecord;
       }

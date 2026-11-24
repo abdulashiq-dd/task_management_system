@@ -1,22 +1,23 @@
 
 require("dotenv").config();
+if (!/\/task_hardening_test_[a-f0-9]{32}(?:\?|$)/.test(process.env.MONGO_URI || "")) throw new Error("Run database tests through npm test; an isolated database is required.");
 
 const mongoose = require("mongoose");
 const fs = require("node:fs/promises");
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 
-const Task = require("../models/taskModel");
+const Task = require("../../src/models/taskModel");
 
 const {
   exportTasksAsJSON
-} = require("../services/exportService");
+} = require("../../src/services/exportService");
 
 const {
   FILE_TYPES,
   getFilePath,
   deleteFile
-} = require("../config/fileStorage");
+} = require("../../src/config/fileStorage");
 
 async function runTests() {
 

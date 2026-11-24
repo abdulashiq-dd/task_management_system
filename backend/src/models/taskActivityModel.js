@@ -57,6 +57,8 @@ taskActivitySchema.index(
   }
 );
 
+taskActivitySchema.index({ task: 1, createdAt: -1 });
+taskActivitySchema.index({ createdAt: -1, _id: -1 });
 module.exports = mongoose.model(
   "TaskActivity",
   taskActivitySchema

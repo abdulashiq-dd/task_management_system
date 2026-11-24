@@ -1,18 +1,20 @@
 
 require("dotenv").config();
+if (!/\/task_hardening_test_[a-f0-9]{32}(?:\?|$)/.test(process.env.MONGO_URI || "")) throw new Error("Run database tests through npm test; an isolated database is required.");
 
 const mongoose = require("mongoose");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const { randomUUID } = require("node:crypto");
 
-const Task = require("../models/taskModel");
+const Task = require("../../src/models/taskModel");
+const User = require("../../src/models/userModel");
 
 const {
   Export,
   EXPORT_STATUS,
   MIME_TYPES
-} = require("../models/exportModel");
+} = require("../../src/models/exportModel");
 
 const {
   FILE_TYPES,
@@ -20,11 +22,11 @@ const {
   getFilePath,
   fileExists,
   deleteFile
-} = require("../config/fileStorage");
+} = require("../../src/config/fileStorage");
 
 const {
   processExportJob
-} = require("../services/exportJobService");
+} = require("../../src/services/exportJobService");
 
 async function runTests() {
 
@@ -99,6 +101,7 @@ async function runTests() {
       process.env.MONGO_URI
     );
 
+    await User.create({ _id: userId, name: "Export test user", email: `${userId}@example.invalid`, password: "fixture-not-used-for-login", role: "user" });
     console.log("MongoDB connected");
 
     await Export.init();
@@ -495,6 +498,7 @@ async function runTests() {
 
       } finally {
 
+        if (mongoose.connection.readyState === 1) await User.deleteOne({ _id: userId });
         await mongoose.disconnect();
 
         console.log("MongoDB disconnected");

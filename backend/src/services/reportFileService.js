@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const fs = require("node:fs/promises");
 const { randomUUID } = require("node:crypto");
@@ -148,14 +149,9 @@ async function generateTaskSummaryReport(
       fileName
     );
 
-    console.log(
-      "[Report Service] Task summary report generated"
-    );
+    logger.info("[Report Service] Task summary report generated");
 
-    console.log(
-      "[Report Service] Total tasks:",
-      report.totalTasks
-    );
+    logger.info("[Report Service] Total tasks");
 
     return {
 

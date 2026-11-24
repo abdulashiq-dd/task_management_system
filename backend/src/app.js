@@ -9,9 +9,7 @@ const jobRoutes = require("./routes/jobRoutes");
 const exportRoutes = require("./routes/exportRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 // Register task event listeners
-require("./events/taskActivityListener");
 require("./events/taskConsoleListener");
-require("./events/taskNotificationListener");
 
 const errorHandler = require("./middleware/errorMiddleware");
 

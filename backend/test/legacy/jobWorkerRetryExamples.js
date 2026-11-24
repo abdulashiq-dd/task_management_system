@@ -5,21 +5,21 @@ const {
   JobQueue,
   JOB_TYPES,
   JOB_STATUS
-} = require("../queues/jobQueue");
+} = require("../../src/queues/jobQueue");
 
 const {
   JobWorker
-} = require("../workers/jobWorker");
+} = require("../../src/workers/jobWorker");
 
 const {
   RetryableError,
   NonRetryableError,
   isRetryableError
-} = require("../utils/jobErrors");
+} = require("../../src/utils/jobErrors");
 
 const {
   sleep
-} = require("../utils/retry");
+} = require("../../src/utils/retry");
 
 // ==========================================
 // TEST HELPERS

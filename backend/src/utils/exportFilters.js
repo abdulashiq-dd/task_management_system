@@ -1,11 +1,8 @@
 
 const mongoose = require("mongoose");
 
-function createError(message, statusCode = 400) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
+const { createError } = require("./httpError");
+const { taskVisibility } = require("./taskAccess");
 
 function buildExportFilter(currentUser, filters = {}) {
 
@@ -51,20 +48,7 @@ function buildExportFilter(currentUser, filters = {}) {
 
   // 2. User authorization
 
-  if (currentUser.role !== "admin") {
-
-    const userId = new mongoose.Types.ObjectId(
-      currentUser.id
-    );
-
-    conditions.push({
-      $or: [
-        { createdBy: userId },
-        { assignedTo: userId }
-      ]
-    });
-
-  }
+  if (currentUser.role !== "admin") conditions.push(taskVisibility(currentUser));
 
   // 3. Status filter
 

@@ -5,9 +5,9 @@ const {
   JobQueue,
   JOB_TYPES,
   JOB_STATUS,
-} = require("../queues/jobQueue");
+} = require("../../src/queues/jobQueue");
 
-const { sleep } = require("../utils/retry");
+const { sleep } = require("../../src/utils/retry");
 
 // ==========================================
 // CREATE ISOLATED TEST QUEUE

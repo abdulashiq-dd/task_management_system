@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const {
   queueExportJob
@@ -39,10 +40,7 @@ function handleError(error, res) {
       ? error.statusCode
       : 500;
 
-  console.error(
-    "[Export Controller] Error:",
-    error.message
-  );
+  logger.error("[Export Controller] Error", error);
 
   return res.status(statusCode).json({
 
@@ -309,18 +307,13 @@ async function downloadExport(req, res, next) {
 
         if (!error) {
 
-          console.log(
-            "[Export Controller] Download completed"
-          );
+          logger.info("[Export Controller] Download completed");
 
           return;
 
         }
 
-        console.error(
-          "[Export Controller] Download failed:",
-          error.message
-        );
+        logger.error("[Export Controller] Download failed", error);
 
         // If transfer has already started,
         // delegate to the Express error handler.

@@ -13,7 +13,7 @@ const {
   fileExists,
   getFileMetadata,
   deleteFile
-} = require("../config/fileStorage");
+} = require("../../src/config/fileStorage");
 
 async function runTests() {
 

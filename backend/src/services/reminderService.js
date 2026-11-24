@@ -1,6 +1,7 @@
 
 const Task = require("../models/taskModel");
 const Notification = require("../models/notificationModel");
+const logger = require("../utils/logger");
 
 // Reminder window: 24 hours
 const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -9,7 +10,7 @@ const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 // 1. GET UPCOMING TASKS
 // ==========================================
 
-const getUpcomingTasks = async (now = new Date()) => {
+const getUpcomingTasks = (now = new Date()) => {
   const reminderDeadline = new Date(
     now.getTime() + REMINDER_WINDOW_MS
   );
@@ -29,11 +30,12 @@ const getUpcomingTasks = async (now = new Date()) => {
 // 2. GET OVERDUE TASKS
 // ==========================================
 
-const getOverdueTasks = async (now = new Date()) => {
+const getOverdueTasks = (now = new Date()) => {
   return Task.find({
     status: {
       $in: ["pending", "in_progress"],
     },
+    isOverdue: { $ne: true },
     dueDate: {
       $ne: null,
       $lte: now,
@@ -77,9 +79,7 @@ const createReminderNotification = async (
       deduplicationKey,
     });
 
-    console.log(
-      `[Reminder] ${type} created: ${task.title}`
-    );
+    logger.info(`Reminder created: ${type}`);
 
     return true;
   } catch (error) {
@@ -97,11 +97,13 @@ const createReminderNotification = async (
 // ==========================================
 
 const processUpcomingTasks = async (now) => {
-  const tasks = await getUpcomingTasks(now);
+  const tasks = getUpcomingTasks(now).cursor({ batchSize: 100 });
+  let upcomingTasks = 0;
 
   let remindersCreated = 0;
 
-  for (const task of tasks) {
+  for await (const task of tasks) {
+    upcomingTasks++;
     const created = await createReminderNotification(
       task,
       "taskReminder"
@@ -113,7 +115,7 @@ const processUpcomingTasks = async (now) => {
   }
 
   return {
-    upcomingTasks: tasks.length,
+    upcomingTasks,
     remindersCreated,
   };
 };
@@ -123,67 +125,20 @@ const processUpcomingTasks = async (now) => {
 // ==========================================
 
 const processOverdueTasks = async (now) => {
-  const tasks = await getOverdueTasks(now);
-
-  let newlyOverdue = 0;
-  let overdueNotificationsCreated = 0;
-
-  for (const task of tasks) {
-    // Mark overdue only if the task still qualifies.
-    const result = await Task.updateOne(
-      {
-        _id: task._id,
-        status: {
-          $in: ["pending", "in_progress"],
-        },
-        dueDate: task.dueDate,
-        isOverdue: { $ne: true },
-      },
-      {
-        $set: {
-          isOverdue: true,
-          overdueAt: now,
-        },
-      }
-    );
-
-    if (result.modifiedCount > 0) {
-      newlyOverdue++;
-
-      console.log(
-        `[Reminder] Task marked overdue: ${task.title}`
-      );
-    }
-
-    // Recheck eligibility before creating a notification.
-    const currentTask = await Task.findOne({
-      _id: task._id,
-      status: {
-        $in: ["pending", "in_progress"],
-      },
-      dueDate: task.dueDate,
-      isOverdue: true,
-    }).lean();
-
-    if (!currentTask) {
-      continue;
-    }
-
-    const created = await createReminderNotification(
-      currentTask,
-      "taskOverdue"
-    );
-
-    if (created) {
-      overdueNotificationsCreated++;
-    }
+  const tasks = getOverdueTasks(now).cursor({ batchSize: 100 });
+  let overdueTasks = 0, newlyOverdue = 0, overdueNotificationsCreated = 0;
+  for await (const task of tasks) {
+    overdueTasks++;
+    const filter = { _id: task._id, status: { $in: ["pending", "in_progress"] }, dueDate: task.dueDate, assignedTo: task.assignedTo || null, isOverdue: { $ne: true } };
+    const currentTask = await Task.findOne(filter).lean();
+    if (!currentTask) continue;
+    // A notification failure must leave the task eligible on the next sweep.
+    // If the following update fails, the unique reminder key prevents duplicates.
+    if (await createReminderNotification(currentTask, "taskOverdue")) overdueNotificationsCreated++;
+    const result = await Task.updateOne(filter, { $set: { isOverdue: true, overdueAt: now } });
+    newlyOverdue += result.modifiedCount;
   }
-
-  return {
-    overdueTasks: tasks.length,
-    newlyOverdue,
-    overdueNotificationsCreated,
-  };
+  return { overdueTasks, newlyOverdue, overdueNotificationsCreated };
 };
 
 // ==========================================
@@ -218,9 +173,7 @@ const resetOverdueTasks = async (now) => {
 const runReminderCheck = async () => {
   const now = new Date();
 
-  console.log(
-    `[Reminder] Check started: ${now.toISOString()}`
-  );
+  logger.info("[Reminder] Check started: [redacted]");
 
   // Reset flags before processing tasks.
   const overdueFlagsReset = await resetOverdueTasks(now);
@@ -246,10 +199,10 @@ const runReminderCheck = async () => {
         : null,
     errors: results
       .filter((result) => result.status === "rejected")
-      .map((result) => result.reason.message),
+      .map((result) => { logger.error("Reminder operation failed", result.reason); return "Reminder operation failed"; }),
   };
 
-  console.log("[Reminder] Check completed:", summary);
+  logger.info("Reminder check completed");
 
   return summary;
 };
