@@ -1,0 +1,87 @@
+<main class="auth-page">
+  <section class="auth-card" aria-labelledby="register-title">
+    <a class="brand" href="/signup" aria-label="TaskOrbit signup">
+      <span class="brand-mark">T</span>
+      <span>TaskOrbit</span>
+    </a>
+
+    <header class="auth-header">
+      <h1 id="register-title">Create your account</h1>
+      <p>Start organizing tasks and staying productive.</p>
+    </header>
+
+    @if (errorMessage()) {
+      <div class="alert" role="alert">{{ errorMessage() }}</div>
+    }
+
+    @if (successMessage()) {
+      <div class="success" role="status">{{ successMessage() }}</div>
+    }
+
+    <form [formGroup]="registerForm" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label for="name">Full name</label>
+        <div class="input-wrap">
+          <span class="pi pi-user" aria-hidden="true"></span>
+          <input
+            id="name"
+            type="text"
+            autocomplete="name"
+            formControlName="name"
+            placeholder="Your name"
+          />
+        </div>
+        @if (registerForm.controls.name.touched && registerForm.controls.name.invalid) {
+          <small>Enter at least 2 characters.</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="email">Email address</label>
+        <div class="input-wrap">
+          <span class="pi pi-envelope" aria-hidden="true"></span>
+          <input
+            id="email"
+            type="email"
+            autocomplete="email"
+            formControlName="email"
+            placeholder="you@example.com"
+          />
+        </div>
+        @if (registerForm.controls.email.touched && registerForm.controls.email.invalid) {
+          <small>Enter a valid email address.</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="input-wrap">
+          <span class="pi pi-lock" aria-hidden="true"></span>
+          <input
+            id="password"
+            type="password"
+            autocomplete="new-password"
+            formControlName="password"
+            placeholder="At least 8 characters"
+          />
+        </div>
+        @if (registerForm.controls.password.touched && registerForm.controls.password.invalid) {
+          <small>Use a password between 8 and 72 characters.</small>
+        }
+      </div>
+
+      <button class="submit-button" type="submit" [disabled]="submitting()">
+        @if (submitting()) {
+          Creating account...
+        } @else {
+          Create account
+        }
+      </button>
+    </form>
+
+    <p class="switch-auth">
+      Already have an account?
+      <a routerLink="/login">Sign in</a>
+    </p>
+  </section>
+</main>
