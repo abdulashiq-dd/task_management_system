@@ -1,1 +1,142 @@
-<p>task-form works!</p>
+<section class="task-form-page" aria-labelledby="task-form-title">
+  <header class="task-form-heading">
+    <div>
+      <p class="eyebrow">Task workspace</p>
+      <h2 id="task-form-title">{{ isEditMode() ? 'Update task' : 'Create a task' }}</h2>
+      <p class="heading-copy">
+        {{
+          isEditMode()
+            ? 'Make changes to your task details.'
+            : 'Capture the next step and keep your work moving.'
+        }}
+      </p>
+    </div>
+    <a class="back-link" routerLink="/tasks">
+      <i class="pi pi-arrow-left" aria-hidden="true"></i>
+      Back to tasks
+    </a>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="form-alert" role="alert">
+      <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
+      {{ errorMessage() }}
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading-card" role="status">
+      <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+      Loading task details...
+    </div>
+  } @else {
+    <form class="task-form-card" [formGroup]="taskForm" (ngSubmit)="submit()" novalidate>
+      <div class="form-section-heading">
+        <span class="section-icon" aria-hidden="true"><i class="pi pi-file-edit"></i></span>
+        <div>
+          <h3>Task details</h3>
+          <p>Give your task a clear name and enough context to get started.</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="task-title">Task name <span aria-hidden="true">*</span></label>
+        <input
+          id="task-title"
+          type="text"
+          formControlName="title"
+          maxlength="120"
+          autocomplete="off"
+          placeholder="e.g. Prepare the project update"
+          [attr.aria-invalid]="taskForm.controls.title.touched && taskForm.controls.title.invalid"
+          aria-describedby="task-title-hint"
+        />
+        @if (taskForm.controls.title.touched && taskForm.controls.title.invalid) {
+          <small class="field-error" id="task-title-hint">
+            @if (taskForm.controls.title.hasError('maxlength')) {
+              Keep the task name to 120 characters or fewer.
+            } @else {
+              Enter a task name to continue.
+            }
+          </small>
+        } @else {
+          <small class="field-hint" id="task-title-hint">A short, specific title works best.</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="task-description"
+          >Description <span class="optional-label">Optional</span></label
+        >
+        <textarea
+          id="task-description"
+          formControlName="description"
+          rows="5"
+          maxlength="2000"
+          placeholder="Add notes, requirements, or helpful context..."
+        ></textarea>
+        <div class="field-meta">
+          @if (
+            taskForm.controls.description.touched &&
+            taskForm.controls.description.hasError('maxlength')
+          ) {
+            <small class="field-error">Keep the description to 2,000 characters or fewer.</small>
+          } @else {
+            <small class="field-hint">Add any details that will help you complete this task.</small>
+          }
+          <small class="field-hint">{{ taskForm.controls.description.value.length }}/2000</small>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="task-status">Status</label>
+          <select id="task-status" formControlName="status">
+            <option value="pending">Pending</option>
+            <option value="in_progress">In progress</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="task-priority">Priority</label>
+          <select id="task-priority" formControlName="priority">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="task-due-date">Due date <span class="optional-label">Optional</span></label>
+          <input id="task-due-date" type="date" formControlName="dueDate" />
+        </div>
+
+        <div class="field">
+          <label for="task-tags">Tags <span class="optional-label">Optional</span></label>
+          <input
+            id="task-tags"
+            type="text"
+            formControlName="tags"
+            autocomplete="off"
+            placeholder="design, planning, launch"
+          />
+          <small class="field-hint">Separate tags with commas.</small>
+        </div>
+      </div>
+
+      <footer class="form-actions">
+        <a class="button button-secondary" routerLink="/tasks">Cancel</a>
+        <button class="button button-primary" type="submit" [disabled]="submitting()">
+          @if (submitting()) {
+            <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+            Saving...
+          } @else {
+            <i [class]="isEditMode() ? 'pi pi-check' : 'pi pi-plus'" aria-hidden="true"></i>
+            {{ isEditMode() ? 'Save changes' : 'Create task' }}
+          }
+        </button>
+      </footer>
+    </form>
+  }
+</section>
