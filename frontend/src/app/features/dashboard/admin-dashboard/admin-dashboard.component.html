@@ -1,0 +1,119 @@
+<section class="dashboard">
+  <header class="dashboard-heading">
+    <div>
+      <p class="eyebrow">ADMINISTRATION</p>
+      <h1>Welcome back, {{ user()?.name || 'Admin' }}</h1>
+      <p class="subtitle">A live overview of tasks across your workspace.</p>
+    </div>
+    <div class="admin-badge"><i class="pi pi-shield"></i> Admin overview</div>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="error-panel" role="alert">
+      <span>{{ errorMessage() }}</span>
+      <button type="button" (click)="loadDashboard()">Try again</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading-panel" role="status">Loading workspace insights…</div>
+  } @else if (stats(); as dashboard) {
+    <div class="stat-grid">
+      <article class="stat-card">
+        <span class="stat-icon blue"><i class="pi pi-objects-column"></i></span>
+        <p>Total tasks</p>
+        <strong>{{ dashboard.totalTasks }}</strong>
+        <span class="stat-note">Across all users</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon amber"><i class="pi pi-hourglass"></i></span>
+        <p>Open tasks</p>
+        <strong>{{ openTasks() }}</strong>
+        <span class="stat-note">Pending or in progress</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon green"><i class="pi pi-check-circle"></i></span>
+        <p>Completed</p>
+        <strong>{{ dashboard.completedTasks }}</strong>
+        <span class="stat-note">{{ completionRate() }}% completion rate</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon red"><i class="pi pi-exclamation-triangle"></i></span>
+        <p>Overdue</p>
+        <strong>{{ dashboard.overdueTasks }}</strong>
+        <span class="stat-note">Across the workspace</span>
+      </article>
+    </div>
+
+    <div class="content-grid">
+      <article class="panel overview-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">WORKSPACE HEALTH</p>
+            <h2>Task completion</h2>
+          </div>
+          <span class="completion-percent">{{ completionRate() }}%</span>
+        </div>
+        <div
+          class="completion-track"
+          role="progressbar"
+          [attr.aria-valuenow]="completionRate()"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-label="Task completion rate"
+        >
+          <span [style.width.%]="completionRate()"></span>
+        </div>
+        <div class="completion-summary">
+          <span>{{ dashboard.completedTasks }} tasks completed</span>
+          <span>{{ openTasks() }} still open</span>
+        </div>
+
+        <h3>Priority distribution</h3>
+        <div class="priority-grid">
+          <div class="priority-item high">
+            <span>High priority</span><strong>{{ dashboard.tasksByPriority.high }}</strong>
+          </div>
+          <div class="priority-item medium">
+            <span>Medium priority</span><strong>{{ dashboard.tasksByPriority.medium }}</strong>
+          </div>
+          <div class="priority-item low">
+            <span>Low priority</span><strong>{{ dashboard.tasksByPriority.low }}</strong>
+          </div>
+        </div>
+        <a class="text-link" routerLink="/tasks"
+          >Manage workspace tasks <i class="pi pi-arrow-right"></i
+        ></a>
+      </article>
+
+      <article class="panel activity-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">WORKSPACE PULSE</p>
+            <h2>Recent activity</h2>
+          </div>
+          <a routerLink="/activity">View activity <i class="pi pi-arrow-right"></i></a>
+        </div>
+        @if (dashboard.recentActivity.length) {
+          <ul class="activity-list">
+            @for (activity of dashboard.recentActivity.slice(0, 6); track activity._id) {
+              <li>
+                <span class="activity-icon"><i class="pi pi-bolt"></i></span>
+                <span class="activity-copy">
+                  <strong>{{ activityLabel(activity) }}</strong>
+                  <small>{{ activity.createdAt | date: 'MMM d, h:mm a' }}</small>
+                </span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="empty-state">
+            <i class="pi pi-inbox"></i>
+            <strong>No workspace activity yet</strong>
+            <span>Activity will appear here as tasks change.</span>
+          </div>
+        }
+      </article>
+    </div>
+  }
+</section>

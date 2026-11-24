@@ -1,0 +1,66 @@
+<main class="auth-page">
+  <section class="auth-card" aria-labelledby="login-title">
+    <a class="brand" routerLink="/login" aria-label="TaskOrbit login">
+      <span class="brand-mark">T</span>
+      <span>TaskOrbit</span>
+    </a>
+
+    <header class="auth-header">
+      <h1 id="login-title">Welcome back</h1>
+      <p>Sign in to continue to your workspace.</p>
+    </header>
+
+    @if (errorMessage()) {
+      <div class="alert" role="alert">{{ errorMessage() }}</div>
+    }
+
+    <form [formGroup]="loginForm" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label for="email">Email address</label>
+        <div class="input-wrap">
+          <span class="pi pi-envelope" aria-hidden="true"></span>
+          <input
+            id="email"
+            type="email"
+            autocomplete="email"
+            formControlName="email"
+            placeholder="you@example.com"
+          />
+        </div>
+        @if (loginForm.controls.email.touched && loginForm.controls.email.invalid) {
+          <small>Enter a valid email address.</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="input-wrap">
+          <span class="pi pi-lock" aria-hidden="true"></span>
+          <input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            formControlName="password"
+            placeholder="Enter your password"
+          />
+        </div>
+        @if (loginForm.controls.password.touched && loginForm.controls.password.invalid) {
+          <small>Password is required.</small>
+        }
+      </div>
+
+      <button class="submit-button" type="submit" [disabled]="submitting()">
+        @if (submitting()) {
+          Signing in...
+        } @else {
+          Sign in
+        }
+      </button>
+    </form>
+
+    <p class="switch-auth">
+      Don't have an account?
+      <a routerLink="/signup">Create account</a>
+    </p>
+  </section>
+</main>

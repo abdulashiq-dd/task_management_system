@@ -1,0 +1,10 @@
+
+<router-outlet></router-outlet>
+<p-button
+  class="theme-toggle"
+  [icon]="themeService.isDark() ? 'pi pi-sun' : 'pi pi-moon'"
+  [text]="true"
+  severity="secondary"
+  [ariaLabel]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
+  (onClick)="themeService.toggle()"
+/>

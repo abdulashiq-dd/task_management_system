@@ -1,0 +1,141 @@
+
+@use 'primeflex/primeflex.css';
+@use 'primeicons/primeicons.css';
+
+:root {
+  --taskorbit-primary: #4f46e5;
+  --taskorbit-primary-hover: #4338ca;
+  --taskorbit-link: #4338ca;
+  --taskorbit-primary-soft: #eef2ff;
+  --taskorbit-success: #16835d;
+  --taskorbit-warning: #9a5c00;
+  --taskorbit-danger: #b4232c;
+  --taskorbit-accent: #bdf8df;
+  --app-background: #f4f6fb;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f8fafc;
+  --app-border: #e2e8f0;
+  --app-text: #172033;
+  --app-text-muted: #64748b;
+  --app-shadow: 0 8px 28px rgba(24, 39, 75, 0.07);
+  --status-success-text: #166534;
+  --status-success-surface: #eaf7ef;
+  --status-warning-text: #854d0e;
+  --status-warning-surface: #fff7e6;
+  --status-danger-text: #991b1b;
+  --status-danger-surface: #fef0f0;
+  --status-info-text: #3730a3;
+  --status-info-surface: #eef2ff;
+  --app-focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.24);
+  --sidebar-background: #17233a;
+  --sidebar-border: rgba(148, 163, 184, 0.14);
+  --sidebar-text: #b9c3d3;
+  --sidebar-muted: #91a0b7;
+  --sidebar-caption: #7f8da4;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-active: rgba(129, 140, 248, 0.2);
+  --sidebar-accent: #a5b4fc;
+  color-scheme: light;
+}
+
+.app-dark {
+  --taskorbit-primary-hover: #6366f1;
+  --taskorbit-link: #a5b4fc;
+  --taskorbit-primary-soft: #292b50;
+  --taskorbit-success: #4ade80;
+  --taskorbit-warning: #fbbf24;
+  --taskorbit-danger: #f87171;
+  --app-background: #101725;
+  --app-surface: #182235;
+  --app-surface-muted: #202c41;
+  --app-border: #2b3950;
+  --app-text: #edf2fb;
+  --app-text-muted: #a5b1c3;
+  --app-shadow: 0 10px 32px rgba(0, 0, 0, 0.2);
+  --status-success-text: #86efac;
+  --status-success-surface: #173b32;
+  --status-warning-text: #fcd34d;
+  --status-warning-surface: #40331e;
+  --status-danger-text: #fca5a5;
+  --status-danger-surface: #40272d;
+  --status-info-text: #c7d2fe;
+  --status-info-surface: #292b50;
+  --app-focus-ring: 0 0 0 3px rgba(165, 180, 252, 0.32);
+  --sidebar-background: #111b2d;
+  --sidebar-border: rgba(148, 163, 184, 0.12);
+  --sidebar-text: #c2ccda;
+  --sidebar-muted: #9ba9bc;
+  --sidebar-caption: #8797ad;
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-active: rgba(129, 140, 248, 0.24);
+  --sidebar-accent: #c7d2fe;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--app-background);
+  color: var(--app-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+button,
+a,
+.p-button {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+:focus-visible {
+  outline: 2px solid var(--taskorbit-primary);
+  outline-offset: 2px;
+  box-shadow: var(--app-focus-ring);
+}
+
+input,
+textarea,
+select,
+.p-inputtext,
+.p-select,
+.p-dropdown,
+.p-textarea {
+  color: var(--app-text);
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

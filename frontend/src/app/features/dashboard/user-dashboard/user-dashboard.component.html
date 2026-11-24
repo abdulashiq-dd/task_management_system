@@ -1,0 +1,113 @@
+<section class="dashboard">
+  <header class="dashboard-heading">
+    <div>
+      <p class="eyebrow">MY WORKSPACE</p>
+      <h1>Good to see you, {{ user()?.name || 'there' }}</h1>
+      <p class="subtitle">Here’s how your tasks are moving along.</p>
+    </div>
+    <a class="primary-action" routerLink="/tasks/create">
+      <i class="pi pi-plus" aria-hidden="true"></i>
+      New task
+    </a>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="error-panel" role="alert">
+      <span>{{ errorMessage() }}</span>
+      <button type="button" (click)="loadDashboard()">Try again</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading-panel" role="status">Loading your dashboard…</div>
+  } @else if (stats(); as dashboard) {
+    <div class="stat-grid">
+      <article class="stat-card">
+        <span class="stat-icon blue"><i class="pi pi-list-check"></i></span>
+        <p>Total tasks</p>
+        <strong>{{ dashboard.totalTasks }}</strong>
+        <span class="stat-note">Across your workspace</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon amber"><i class="pi pi-clock"></i></span>
+        <p>Open tasks</p>
+        <strong>{{ openTasks() }}</strong>
+        <span class="stat-note">Still to be completed</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon green"><i class="pi pi-check-circle"></i></span>
+        <p>Completed</p>
+        <strong>{{ dashboard.completedTasks }}</strong>
+        <span class="stat-note">{{ completionRate() }}% completion rate</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon red"><i class="pi pi-exclamation-circle"></i></span>
+        <p>Overdue</p>
+        <strong>{{ dashboard.overdueTasks }}</strong>
+        <span class="stat-note">Needs your attention</span>
+      </article>
+    </div>
+
+    <div class="content-grid">
+      <article class="panel progress-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">OVERVIEW</p>
+            <h2>Task priorities</h2>
+          </div>
+          <a routerLink="/tasks">View tasks <i class="pi pi-arrow-right"></i></a>
+        </div>
+        @for (priority of priorities; track priority) {
+          <div class="priority-row">
+            <div class="priority-label">
+              <span>{{ priority | titlecase }} priority</span>
+              <strong>{{ dashboard.tasksByPriority[priority] }}</strong>
+            </div>
+            <div class="priority-track">
+              <span
+                [class]="'priority-fill ' + priority"
+                [style.width.%]="priorityWidth(priority)"
+              ></span>
+            </div>
+          </div>
+        }
+        <div class="completion-callout">
+          <span class="completion-icon"><i class="pi pi-sparkles"></i></span>
+          <span
+            ><strong>{{ completionRate() }}% complete</strong
+            ><small>Keep the momentum going.</small></span
+          >
+        </div>
+      </article>
+
+      <article class="panel activity-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">YOUR WORK</p>
+            <h2>Recent activity</h2>
+          </div>
+          <a routerLink="/activity">See all <i class="pi pi-arrow-right"></i></a>
+        </div>
+        @if (dashboard.recentActivity.length) {
+          <ul class="activity-list">
+            @for (activity of dashboard.recentActivity.slice(0, 5); track activity._id) {
+              <li>
+                <span class="activity-icon"><i class="pi pi-bolt"></i></span>
+                <span class="activity-copy">
+                  <strong>You {{ activityLabel(activity) }}</strong>
+                  <small>{{ activity.createdAt | date: 'MMM d, h:mm a' }}</small>
+                </span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="empty-state">
+            <i class="pi pi-inbox"></i>
+            <strong>No activity yet</strong>
+            <span>Create a task to get started.</span>
+          </div>
+        }
+      </article>
+    </div>
+  }
+</section>

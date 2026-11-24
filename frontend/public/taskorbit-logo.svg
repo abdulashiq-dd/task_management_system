@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">TaskOrbit</title>
+  <rect width="64" height="64" rx="16" fill="#5066d8"/>
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#fff" stroke-width="5" opacity=".96"/>
+  <circle cx="32" cy="32" r="5" fill="#fff"/>
+  <path d="M32 14c7 0 12 3 15 8" fill="none" stroke="#bdf8df" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="47" cy="22" r="4" fill="#bdf8df"/>
+</svg>
