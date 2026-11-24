@@ -1,3 +1,4 @@
+const { createError } = require("../utils/httpError");
 const logger = require("../utils/logger");
 
 const { randomUUID } = require("node:crypto");
@@ -123,13 +124,7 @@ class JobQueue {
 
     if (activeJobs >= this.maxActiveJobs) {
 
-      const error = new Error(
-        "Job queue is full"
-      );
-
-      error.statusCode = 503;
-
-      throw error;
+      throw createError("Job queue is full", 503);
 
     }
 
@@ -152,13 +147,7 @@ class JobQueue {
 
     if (this.jobs.has(jobId)) {
 
-      const error = new Error(
-        "Job ID already exists"
-      );
-
-      error.statusCode = 409;
-
-      throw error;
+      throw createError("Job ID already exists", 409);
 
     }
 

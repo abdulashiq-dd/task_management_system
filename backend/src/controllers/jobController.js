@@ -1,31 +1,13 @@
-const logger = require("../utils/logger");
+const { forwardApiError } = require("../middleware/errorMiddleware");
 
 const jobService = require("../services/jobService");
-
-// ==========================================
-// ERROR RESPONSE HANDLER
-// ==========================================
-
-function handleError(res, error) {
-  const statusCode = error.statusCode || 500;
-
-  logger.error("[Job Controller] Error", error);
-
-  return res.status(statusCode).json({
-    success: false,
-    message:
-      statusCode >= 500 && statusCode !== 503
-        ? "Internal server error"
-        : error.message,
-  });
-}
 
 // ==========================================
 // 1. GET ALL ACCESSIBLE JOBS
 // GET /api/jobs
 // ==========================================
 
-async function getJobs(req, res) {
+async function getJobs(req, res, next) {
   try {
     const currentUser = {
       id: req.user.id,
@@ -55,7 +37,7 @@ async function getJobs(req, res) {
       jobs,
     });
   } catch (error) {
-    return handleError(res, error);
+    return forwardApiError(error, res, next);
   }
 }
 
@@ -64,7 +46,7 @@ async function getJobs(req, res) {
 // GET /api/jobs/:id
 // ==========================================
 
-async function getJobById(req, res) {
+async function getJobById(req, res, next) {
   try {
     const currentUser = {
       id: req.user.id,
@@ -82,7 +64,7 @@ async function getJobById(req, res) {
       job,
     });
   } catch (error) {
-    return handleError(res, error);
+    return forwardApiError(error, res, next);
   }
 }
 
@@ -91,7 +73,7 @@ async function getJobById(req, res) {
 // GET /api/jobs/stats
 // ==========================================
 
-async function getJobStats(req, res) {
+async function getJobStats(req, res, next) {
   try {
     const currentUser = {
       id: req.user.id,
@@ -107,7 +89,7 @@ async function getJobStats(req, res) {
       stats,
     });
   } catch (error) {
-    return handleError(res, error);
+    return forwardApiError(error, res, next);
   }
 }
 

@@ -1,4 +1,4 @@
-const logger = require("../utils/logger");
+const { forwardApiError } = require("../middleware/errorMiddleware");
 
 const reportService = require(
   "../services/reportService"
@@ -9,7 +9,7 @@ const reportService = require(
 // POST /api/reports/generate
 // ==========================================
 
-async function generateReport(req, res) {
+async function generateReport(req, res, next) {
 
   try {
 
@@ -53,25 +53,7 @@ async function generateReport(req, res) {
       });
 
   } catch (error) {
-
-    const statusCode = error.statusCode || 500;
-
-    logger.error("[Report Controller] Error", error);
-
-    return res.status(statusCode).json({
-
-      success: false,
-
-      message:
-
-        statusCode >= 500 && statusCode !== 503
-
-          ? "Internal server error"
-
-          : error.message
-
-    });
-
+    return forwardApiError(error, res, next);
   }
 
 }

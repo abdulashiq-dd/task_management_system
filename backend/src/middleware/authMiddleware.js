@@ -1,27 +1,24 @@
+const { createError } = require("../utils/httpError");
 
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
 
 const authenticate = async (req, res, next) => {
   try {
-    if (!process.env.JWT_SECRET?.trim()) return next(Object.assign(new Error("JWT_SECRET is not configured"), { statusCode: 500 }));
+    if (!process.env.JWT_SECRET?.trim()) return next(createError("JWT_SECRET is not configured", 500));
     const authHeader = req.headers.authorization;
 
     if (
       !authHeader ||
       !authHeader.startsWith("Bearer ")
     ) {
-      return res.status(401).json({
-        message: "Authentication token required"
-      });
+      return next(createError("Authentication token required", 401));
     }
 
     const token = authHeader.slice(7);
 
     if (!token) {
-      return res.status(401).json({
-        message: "Invalid or expired token"
-      });
+      return next(createError("Invalid or expired token", 401));
     }
 
     const decoded = jwt.verify(
@@ -33,9 +30,7 @@ const authenticate = async (req, res, next) => {
     const user = await User.findById(decoded.sub);
 
     if (!user) {
-      return res.status(401).json({
-        message: "Invalid or expired token"
-      });
+      return next(createError("Invalid or expired token", 401));
     }
 
     req.user = {
@@ -52,9 +47,7 @@ const authenticate = async (req, res, next) => {
       error.name === "TokenExpiredError" ||
       error.name === "CastError"
     ) {
-      return res.status(401).json({
-        message: "Invalid or expired token"
-      });
+      return next(createError("Invalid or expired token", 401));
     }
 
     next(error);

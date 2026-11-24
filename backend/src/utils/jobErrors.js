@@ -8,31 +8,27 @@
 // 1. NON-RETRYABLE ERROR
 // ==========================================
 
-class NonRetryableError extends Error {
-
-  constructor(message, code = "NON_RETRYABLE_ERROR") {
-
-    super(message);
-
-    this.name = "NonRetryableError";
+class QueueProcessingError extends Error {
+  constructor(message, code, retryable, options) {
+    super(message, options);
+    this.name = new.target.name;
     this.code = code;
-    this.retryable = false;
+    this.retryable = retryable;
   }
 }
-
-// ==========================================
-// 2. RETRYABLE ERROR
-// ==========================================
-
-class RetryableError extends Error {
-
-  constructor(message, code = "RETRYABLE_ERROR") {
-
-    super(message);
-
-    this.name = "RetryableError";
-    this.code = code;
-    this.retryable = true;
+class NonRetryableError extends QueueProcessingError {
+  constructor(message, code = "NON_RETRYABLE_ERROR", options) {
+    super(message, code, false, options);
+  }
+}
+class RetryableError extends QueueProcessingError {
+  constructor(message, code = "RETRYABLE_ERROR", options) {
+    super(message, code, true, options);
+  }
+}
+class JobTimeoutError extends NonRetryableError {
+  constructor(message = "Job execution deadline exceeded", options) {
+    super(message, "JOB_TIMEOUT", options);
   }
 }
 
@@ -145,6 +141,8 @@ function isRetryableError(error) {
 // ==========================================
 
 module.exports = {
+  QueueProcessingError,
+  JobTimeoutError,
   RetryableError,
   NonRetryableError,
   isRetryableError

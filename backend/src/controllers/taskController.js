@@ -1,3 +1,4 @@
+const { createError } = require("../utils/httpError");
 const taskService = require("../services/taskService");
 const { taskFields } = require("../utils/taskFields");
 
@@ -51,9 +52,7 @@ const getAllTasks = async (req, res, next) => {
       status !== undefined &&
       (typeof status !== "string" || !allowedStatuses.includes(status))
     ) {
-      return res.status(400).json({
-        message: "Invalid status filter",
-      });
+      throw createError("Invalid status filter", 400);
     }
 
     // Validate priority
@@ -63,9 +62,7 @@ const getAllTasks = async (req, res, next) => {
       priority !== undefined &&
       (typeof priority !== "string" || !allowedPriorities.includes(priority))
     ) {
-      return res.status(400).json({
-        message: "Invalid priority filter",
-      });
+      throw createError("Invalid priority filter", 400);
     }
 
     // Validate search
@@ -73,9 +70,7 @@ const getAllTasks = async (req, res, next) => {
       search !== undefined &&
       (typeof search !== "string" || search.trim().length === 0)
     ) {
-      return res.status(400).json({
-        message: "Invalid search parameter",
-      });
+      throw createError("Invalid search parameter", 400);
     }
 
     // Validate tag
@@ -83,9 +78,7 @@ const getAllTasks = async (req, res, next) => {
       tag !== undefined &&
       (typeof tag !== "string" || tag.trim().length === 0)
     ) {
-      return res.status(400).json({
-        message: "Invalid tag filter",
-      });
+      throw createError("Invalid tag filter", 400);
     }
 
     // Validate date format
@@ -106,33 +99,25 @@ const getAllTasks = async (req, res, next) => {
       (fromDate !== undefined && !isValidDate(fromDate)) ||
       (toDate !== undefined && !isValidDate(toDate))
     ) {
-      return res.status(400).json({
-        message: "Invalid date format. Use YYYY-MM-DD",
-      });
+      throw createError("Invalid date format. Use YYYY-MM-DD", 400);
     }
 
     if (fromDate && toDate && fromDate > toDate) {
-      return res.status(400).json({
-        message: "fromDate cannot be after toDate",
-      });
+      throw createError("fromDate cannot be after toDate", 400);
     }
 
     // Validate sorting field
     const allowedSortFields = ["dueDate", "priority", "createdAt"];
 
     if (typeof sortBy !== "string" || !allowedSortFields.includes(sortBy)) {
-      return res.status(400).json({
-        message: "Invalid sortBy parameter",
-      });
+      throw createError("Invalid sortBy parameter", 400);
     }
 
     // Validate sorting order
     const allowedOrders = ["asc", "desc"];
 
     if (typeof order !== "string" || !allowedOrders.includes(order)) {
-      return res.status(400).json({
-        message: "Invalid order parameter",
-      });
+      throw createError("Invalid order parameter", 400);
     }
 
     // Validate pagination
@@ -146,9 +131,7 @@ const getAllTasks = async (req, res, next) => {
       !isPositiveInteger(limitInput) ||
       Number(limitInput) > 100
     ) {
-      return res.status(400).json({
-        message: "Invalid pagination parameters",
-      });
+      throw createError("Invalid pagination parameters", 400);
     }
 
     const page = Number(pageInput);
@@ -194,9 +177,7 @@ const getTaskById = async (req, res, next) => {
     const task = await taskService.getTaskById(id, req.user);
 
     if (!task) {
-      return res.status(404).json({
-        message: "Task not found",
-      });
+      throw createError("Task not found", 404);
     }
 
     return res.status(200).json({
@@ -221,9 +202,7 @@ const updateTask = async (req, res, next) => {
     const updatedTask = await taskService.updateTask(id, updateData, req.user);
 
     if (!updatedTask) {
-      return res.status(404).json({
-        message: "Task not found",
-      });
+      throw createError("Task not found", 404);
     }
 
     return res.status(200).json({
@@ -246,9 +225,7 @@ const deleteTask = async (req, res, next) => {
     const deletedTask = await taskService.deleteTask(id, req.user);
 
     if (!deletedTask) {
-      return res.status(404).json({
-        message: "Task not found",
-      });
+      throw createError("Task not found", 404);
     }
 
     return res.status(200).json({
@@ -266,9 +243,7 @@ const assignTask = async (req, res, next) => {
     const { assignedTo } = req.body || {};
 
     if (typeof assignedTo !== "string" || !assignedTo.trim()) {
-      return res.status(400).json({
-        message: "assignedTo is required",
-      });
+      throw createError("assignedTo is required", 400);
     }
 
     const updatedTask = await taskService.assignTask(
@@ -277,7 +252,7 @@ const assignTask = async (req, res, next) => {
       req.user,
     );
 
-    if (!updatedTask) return res.status(404).json({ message: "Task not found" });
+    if (!updatedTask) throw createError("Task not found", 404);
     return res.status(200).json({
       message: "Task assigned successfully",
       task: updatedTask,
