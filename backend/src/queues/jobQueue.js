@@ -2,7 +2,7 @@
 const { randomUUID } = require("node:crypto");
 
 const {
-  calculateBackoff,
+  calculateBackoff
 } = require("../utils/retry");
 
 // ==========================================
@@ -13,6 +13,8 @@ const JOB_TYPES = Object.freeze({
   NOTIFICATION: "notification",
   ACTIVITY_LOG: "activityLog",
   REPORT_GENERATION: "reportGeneration",
+  JSON_EXPORT: "jsonExport",
+  CSV_EXPORT: "csvExport",
 });
 
 // ==========================================
@@ -39,6 +41,7 @@ const DEFAULT_RETRY_DELAY_MS = 1000;
 // ==========================================
 
 class JobQueue {
+
   constructor({
     maxRetries = DEFAULT_MAX_RETRIES,
     retryDelay = DEFAULT_RETRY_DELAY_MS,
@@ -80,13 +83,19 @@ class JobQueue {
     // Memory protection limits.
     this.maxActiveJobs = 1000;
     this.maxFinishedJobs = 1000;
+
   }
 
   // ========================================
   // 1. ADD JOB TO QUEUE
   // ========================================
 
-  enqueue(type, payload, userId = null) {
+  enqueue(
+    type,
+    payload,
+    userId = null,
+    options = {}
+  ) {
 
     if (!Object.values(JOB_TYPES).includes(type)) {
       throw new Error(`Invalid job type: ${type}`);
@@ -97,55 +106,115 @@ class JobQueue {
       typeof payload !== "object" ||
       Array.isArray(payload)
     ) {
-      throw new Error("Job payload must be an object");
+      throw new Error(
+        "Job payload must be an object"
+      );
     }
 
     const stats = this.getStats();
 
     // Include delayed retry jobs in memory limits.
+
     const activeJobs =
       stats.pending +
       stats.processing +
       stats.retrying;
 
     if (activeJobs >= this.maxActiveJobs) {
-      const error = new Error("Job queue is full");
+
+      const error = new Error(
+        "Job queue is full"
+      );
+
       error.statusCode = 503;
+
       throw error;
+
+    }
+
+    // Milestone 10:
+    // Support internally generated job IDs.
+    // Existing callers continue to receive UUIDs.
+
+    const jobId =
+      options.jobId ?? randomUUID();
+
+    if (
+      typeof jobId !== "string" ||
+      !jobId.trim() ||
+      jobId.length > 100
+    ) {
+      throw new Error("Invalid job ID");
+    }
+
+    // Prevent duplicate job IDs.
+
+    if (this.jobs.has(jobId)) {
+
+      const error = new Error(
+        "Job ID already exists"
+      );
+
+      error.statusCode = 409;
+
+      throw error;
+
     }
 
     const job = {
-      id: randomUUID(),
+
+      id: jobId,
+
       type,
-      userId: userId ? String(userId) : null,
+
+      userId: userId
+        ? String(userId)
+        : null,
+
       payload,
 
       status: JOB_STATUS.PENDING,
 
       result: null,
+
       error: null,
 
       // Retry metadata.
+
       attempts: 0,
+
       maxRetries: this.maxRetries,
+
       retryCount: 0,
+
       retryDelay: this.retryDelay,
 
       nextRetryAt: null,
+
       lastError: null,
+
       errorHistory: [],
 
       failedAt: null,
+
       isPermanentlyFailed: false,
 
       // Execution timestamps.
+
       createdAt: new Date(),
+
       startedAt: null,
+
       lastAttemptAt: null,
+
       completedAt: null,
+
     };
 
-    this.jobs.set(job.id, job);
+    this.jobs.set(
+      job.id,
+      job
+    );
 
     this.pendingJobs.push(job.id);
 
@@ -154,6 +223,7 @@ class JobQueue {
     );
 
     return job;
+
   }
 
   // ========================================
@@ -162,22 +232,31 @@ class JobQueue {
 
   dequeue() {
 
-    // Promote retry jobs whose waiting period
-    // has completed.
+    // Promote retry jobs whose waiting
+    // period has completed.
+
     this.promoteDelayedJobs();
 
     while (this.pendingJobs.length > 0) {
 
-      const jobId = this.pendingJobs.shift();
+      const jobId =
+        this.pendingJobs.shift();
 
-      const job = this.jobs.get(jobId);
+      const job =
+        this.jobs.get(jobId);
 
-      if (job?.status === JOB_STATUS.PENDING) {
+      if (
+        job?.status === JOB_STATUS.PENDING
+      ) {
+
         return this.markProcessing(jobId);
+
       }
+
     }
 
     return null;
+
   }
 
   // ========================================
@@ -188,7 +267,10 @@ class JobQueue {
 
     const job = this.jobs.get(jobId);
 
-    if (!job || job.status !== JOB_STATUS.PENDING) {
+    if (
+      !job ||
+      job.status !== JOB_STATUS.PENDING
+    ) {
       return null;
     }
 
@@ -197,14 +279,17 @@ class JobQueue {
     job.status = JOB_STATUS.PROCESSING;
 
     // Count every execution attempt.
+
     job.attempts++;
 
-    // Preserve the first execution timestamp.
+    // Preserve first execution timestamp.
+
     if (!job.startedAt) {
       job.startedAt = now;
     }
 
     job.lastAttemptAt = now;
+
     job.nextRetryAt = null;
 
     console.log(
@@ -216,6 +301,7 @@ class JobQueue {
     );
 
     return job;
+
   }
 
   // ========================================
@@ -236,10 +322,13 @@ class JobQueue {
     job.status = JOB_STATUS.COMPLETED;
 
     job.result = result;
+
     job.error = null;
 
     job.nextRetryAt = null;
+
     job.failedAt = null;
+
     job.isPermanentlyFailed = false;
 
     job.completedAt = new Date();
@@ -260,6 +349,7 @@ class JobQueue {
     this.pruneFinishedJobs();
 
     return job;
+
   }
 
   // ========================================
@@ -287,6 +377,7 @@ class JobQueue {
         : String(error);
 
     const errorDetails = {
+
       attempt: job.attempts,
 
       name:
@@ -301,9 +392,11 @@ class JobQueue {
       timestamp: new Date(),
 
       retryable,
+
     };
 
     job.error = errorMessage;
+
     job.lastError = errorMessage;
 
     job.errorHistory.push(errorDetails);
@@ -320,14 +413,18 @@ class JobQueue {
 
     // Retry only if the error is retryable
     // and retries are still available.
+
     if (
       retryable &&
       job.retryCount < job.maxRetries
     ) {
+
       return this.scheduleRetry(jobId);
+
     }
 
     return this.markPermanentlyFailed(jobId);
+
   }
 
   // ========================================
@@ -347,15 +444,18 @@ class JobQueue {
     }
 
     // Count additional retry attempts.
+
     job.retryCount++;
 
     // Calculate exponential backoff.
+
     const delay = calculateBackoff(
       job.retryDelay,
       job.retryCount
     );
 
-    const retryTime = Date.now() + delay;
+    const retryTime =
+      Date.now() + delay;
 
     job.status = JOB_STATUS.RETRYING;
 
@@ -363,8 +463,9 @@ class JobQueue {
 
     job.completedAt = null;
 
-    // Store the delayed job without blocking
+    // Store delayed job without blocking
     // a worker execution slot.
+
     this.delayedJobs.set(
       job.id,
       retryTime
@@ -387,6 +488,7 @@ class JobQueue {
     );
 
     return job;
+
   }
 
   // ========================================
@@ -410,7 +512,9 @@ class JobQueue {
 
     let promoted = 0;
 
-    for (const [jobId] of readyJobs) {
+    for (
+      const [jobId] of readyJobs
+    ) {
 
       const job = this.jobs.get(jobId);
 
@@ -429,6 +533,7 @@ class JobQueue {
 
       // Add eligible retry jobs to the end
       // of the existing FIFO queue.
+
       this.pendingJobs.push(jobId);
 
       promoted++;
@@ -436,9 +541,11 @@ class JobQueue {
       console.log(
         `[Job Queue] Retry job ready: ${jobId}`
       );
+
     }
 
     return promoted;
+
   }
 
   // ========================================
@@ -463,6 +570,7 @@ class JobQueue {
     job.isPermanentlyFailed = true;
 
     job.failedAt = now;
+
     job.completedAt = now;
 
     job.nextRetryAt = null;
@@ -486,6 +594,7 @@ class JobQueue {
     this.pruneFinishedJobs();
 
     return job;
+
   }
 
   // ========================================
@@ -493,7 +602,9 @@ class JobQueue {
   // ========================================
 
   getJob(jobId) {
+
     return this.jobs.get(jobId) || null;
+
   }
 
   // ========================================
@@ -505,8 +616,10 @@ class JobQueue {
     return Array.from(
       this.jobs.values()
     ).sort(
-      (a, b) => b.createdAt - a.createdAt
+      (a, b) =>
+        b.createdAt - a.createdAt
     );
+
   }
 
   // ========================================
@@ -516,8 +629,12 @@ class JobQueue {
   getUserJobs(userId) {
 
     return this.getAllJobs().filter(
-      (job) => job.userId === String(userId)
+
+      job =>
+        job.userId === String(userId)
+
     );
+
   }
 
   // ========================================
@@ -529,28 +646,42 @@ class JobQueue {
   ) {
 
     const stats = {
+
       total: jobs.length,
+
       pending: 0,
+
       processing: 0,
+
       retrying: 0,
+
       completed: 0,
+
       failed: 0,
+
     };
 
     for (const job of jobs) {
 
       if (
+
         Object.prototype.hasOwnProperty.call(
           stats,
           job.status
         ) &&
+
         job.status !== "total"
+
       ) {
+
         stats[job.status]++;
+
       }
+
     }
 
     return stats;
+
   }
 
   // ========================================
@@ -562,6 +693,7 @@ class JobQueue {
     this.promoteDelayedJobs();
 
     return this.pendingJobs.length;
+
   }
 
   // ========================================
@@ -569,7 +701,9 @@ class JobQueue {
   // ========================================
 
   getDelayedCount() {
+
     return this.delayedJobs.size;
+
   }
 
   // ========================================
@@ -582,13 +716,17 @@ class JobQueue {
       this.jobs.values()
     )
       .filter(
-        (job) =>
+
+        job =>
           job.status === JOB_STATUS.COMPLETED ||
           job.status === JOB_STATUS.FAILED
+
       )
       .sort(
+
         (a, b) =>
           a.completedAt - b.completedAt
+
       );
 
     const excess =
@@ -599,10 +737,20 @@ class JobQueue {
       return;
     }
 
-    for (let i = 0; i < excess; i++) {
-      this.jobs.delete(finishedJobs[i].id);
+    for (
+      let i = 0;
+      i < excess;
+      i++
+    ) {
+
+      this.jobs.delete(
+        finishedJobs[i].id
+      );
+
     }
+
   }
+
 }
 
 // ==========================================
@@ -616,10 +764,17 @@ const jobQueue = new JobQueue();
 // ==========================================
 
 module.exports = {
+
   JobQueue,
+
   jobQueue,
+
   JOB_TYPES,
+
   JOB_STATUS,
+
   DEFAULT_MAX_RETRIES,
+
   DEFAULT_RETRY_DELAY_MS,
+
 };

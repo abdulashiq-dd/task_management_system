@@ -6,7 +6,7 @@ const authRoutes = require("./routes/authRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const jobRoutes = require("./routes/jobRoutes");
-
+const exportRoutes = require("./routes/exportRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 // Register task event listeners
 require("./events/taskActivityListener");
@@ -20,7 +20,7 @@ const app = express();
 app.use(express.json());
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/jobs", jobRoutes);
-
+app.use("/api/exports", exportRoutes);
 app.use("/api/reports", reportRoutes);
 app.get("/", (req, res) => {
   res.status(200).json({

@@ -2,87 +2,130 @@
 const mongoose = require("mongoose");
 
 const {
-  jobQueue,
-  JOB_TYPES,
-} = require("../queues/jobQueue");
+  queueExportJob
+} = require("./exportJobService");
+
+const {
+  FILE_TYPES
+} = require("../config/fileStorage");
 
 // ==========================================
-// SUPPORTED REPORT TYPES
+// 1. SUPPORTED REPORT TYPES
 // ==========================================
 
 const REPORT_TYPES = Object.freeze({
-  TASK_SUMMARY: "taskSummary",
+
+  TASK_SUMMARY: "taskSummary"
+
 });
 
 // ==========================================
-// CREATE CUSTOM ERROR
+// 2. CREATE CUSTOM ERROR
 // ==========================================
 
 function createError(message, statusCode) {
+
   const error = new Error(message);
 
   error.statusCode = statusCode;
 
   return error;
+
 }
 
 // ==========================================
-// GENERATE REPORT JOB
+// 3. GENERATE DOWNLOADABLE REPORT
 // ==========================================
 
-function generateReport(reportData, currentUser) {
+async function generateReport(
+  reportData,
+  currentUser
+) {
+
+  // Validate authenticated user.
+
   if (!currentUser || !currentUser.id) {
+
     throw createError(
       "Authentication required",
       401
     );
+
   }
 
   if (!mongoose.isValidObjectId(currentUser.id)) {
-    throw createError("Invalid user ID", 400);
+
+    throw createError(
+      "Invalid user ID",
+      400
+    );
+
   }
 
-  if (!["user", "admin"].includes(currentUser.role)) {
-    throw createError("Invalid user role", 403);
+  if (
+    !["user", "admin"].includes(currentUser.role)
+  ) {
+
+    throw createError(
+      "Invalid user role",
+      403
+    );
+
   }
+
+  // Validate request data.
 
   if (
     !reportData ||
     typeof reportData !== "object" ||
     Array.isArray(reportData)
   ) {
+
     throw createError(
       "Invalid report request",
       400
     );
+
   }
 
   const { reportType } = reportData;
 
-  if (!Object.values(REPORT_TYPES).includes(reportType)) {
+  if (
+    !Object.values(REPORT_TYPES).includes(reportType)
+  ) {
+
     throw createError(
       "Unsupported report type",
       400
     );
+
   }
 
-  // Use authenticated user details rather than
-  // trusting user information from the request body.
-  const payload = {
-    reportType,
+  const unsupportedFields =
+    Object.keys(reportData).filter(
+      key => key !== "reportType"
+    );
 
-    currentUser: {
-      id: String(currentUser.id),
-      role: currentUser.role,
-    },
-  };
+  if (unsupportedFields.length > 0) {
 
-  // Add report generation to the queue.
-  // Do not wait for the report to finish.
-  const job = jobQueue.enqueue(
-    JOB_TYPES.REPORT_GENERATION,
-    payload,
-    currentUser.id
+    throw createError(
+      "Only reportType is supported",
+      400
+    );
+
+  }
+
+  // Milestone 10:
+  // Create export metadata and submit background job.
+
+  const job = await queueExportJob(
+
+    FILE_TYPES.REPORT,
+
+    currentUser,
+
+    {}
+
   );
 
   console.log(
@@ -90,19 +133,23 @@ function generateReport(reportData, currentUser) {
   );
 
   return {
-    id: job.id,
-    type: job.type,
-    reportType,
-    status: job.status,
-    createdAt: job.createdAt,
+
+    ...job,
+
+    reportType
+
   };
+
 }
 
 // ==========================================
-// EXPORTS
+// 4. EXPORT SERVICES
 // ==========================================
 
 module.exports = {
+
   generateReport,
-  REPORT_TYPES,
+
+  REPORT_TYPES
+
 };
