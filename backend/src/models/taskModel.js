@@ -43,6 +43,8 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Embedded durable outbox, never part of public task responses.
+    pendingEvents: { type: [mongoose.Schema.Types.Mixed], default: [], select: false },
     // User who created the task
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -59,13 +61,19 @@ const taskSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { transform: (_doc, result) => { delete result.pendingEvents; return result; } },
   },
 );
 
-const Task = mongoose.model("Task", taskSchema);
+
 taskSchema.index({
   status: 1,
   dueDate: 1,
 });
 
+taskSchema.index({ "pendingEvents.id": 1 }, { sparse: true });
+taskSchema.index({ createdBy: 1, status: 1 });
+taskSchema.index({ assignedTo: 1, status: 1 });
+taskSchema.index({ isOverdue: 1, status: 1, dueDate: 1 });
+const Task = mongoose.model("Task", taskSchema);
 module.exports = Task;

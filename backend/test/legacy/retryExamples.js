@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const {
     retry,
     calculateBackoff
-} = require("../utils/retry");
+} = require("../../src/utils/retry");
 
 // ==========================================
 // TEST 1 - IMMEDIATE SUCCESS

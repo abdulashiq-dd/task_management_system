@@ -2,6 +2,8 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
+// A fixed valid bcrypt hash ensures unknown accounts still incur a cost-12 comparison.
+const DUMMY_HASH = "$2b$12$w9i2Sli8ps0tLRg5KjvHROn1AykJHSQqOlRpFGYNtjqLm2ivvS.I2";
 
 const registerUser = async ({ name, email, password }) => {
   const normalizedName = name.trim();
@@ -53,18 +55,8 @@ const loginUser = async ({ email, password }) => {
     email: normalizedEmail
   }).select("+password");
 
-  if (!user) {
-    const error = new Error("Invalid email or password");
-    error.statusCode = 401;
-    throw error;
-  }
-
-  const isPasswordValid = await bcrypt.compare(
-    password,
-    user.password
-  );
-
-  if (!isPasswordValid) {
+  const isPasswordValid = await bcrypt.compare(password, user?.password || DUMMY_HASH);
+  if (!user || !isPasswordValid) {
     const error = new Error("Invalid email or password");
     error.statusCode = 401;
     throw error;

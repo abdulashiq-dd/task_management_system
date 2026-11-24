@@ -1,17 +1,16 @@
 const Task = require("../models/taskModel");
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
-const taskEventEmitter = require("../events/taskEventEmitter");
+const { makeEvent, flushBestEffort, flushTaskEvents } = require("../events/taskOutbox");
+const { createError } = require("../utils/httpError");
+const { validateUser, taskVisibility } = require("../utils/taskAccess");
+const { taskFields } = require("../utils/taskFields");
 
 // ==========================================
 // HELPER — ERROR HANDLING
 // ==========================================
 
-const createError = (message, statusCode) => {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-};
+
 
 // ==========================================
 // HELPER — TASK PERMISSIONS
@@ -33,28 +32,26 @@ const canViewTask = (task, currentUser) => {
 // HELPER — EMIT TASK EVENT
 // ==========================================
 
-const emitTaskEvent = (eventType, task, userId, details = {}) => {
-  taskEventEmitter.emit(eventType, {
-    taskId: task._id,
-    performedBy: userId,
-    details,
-  });
-};
+// Match the version read before building the event snapshot. Bound outbox growth.
+function mutationFilter(permission, task) {
+  return { ...permission, __v: task.__v, $expr: { $lt: [{ $size: { $ifNull: ["$pendingEvents", []] } }, 99] } };
+}
+async function mutationConflict(id) {
+  if (!(await Task.exists({ _id: id }))) throw createError("Task not found", 404);
+  throw createError("Task changed or its event backlog is full; retry", 409);
+}
 
 // ==========================================
 // 1. CREATE TASK
 // ==========================================
 
-const createTask = async (taskData) => {
-  const newTask = await Task.create(taskData);
-
-  // Emit event only after successful creation.
-  emitTaskEvent("taskCreated", newTask, newTask.createdBy, {
-    title: newTask.title,
-    status: newTask.status,
-    priority: newTask.priority,
-  });
-
+const createTask = async (taskData, currentUser) => {
+  validateUser(currentUser);
+  const newTask = new Task({ ...taskFields(taskData), createdBy: currentUser.id });
+  await newTask.validate();
+  newTask.pendingEvents = [makeEvent("taskCreated", newTask, currentUser.id, { title: newTask.title, status: newTask.status, priority: newTask.priority })];
+  await newTask.save();
+  await flushBestEffort(newTask._id);
   return newTask;
 };
 
@@ -77,21 +74,9 @@ const getAllTasks = async (
   limit = 10,
   currentUser,
 ) => {
-  if (!currentUser?.id) {
-    throw createError("Authentication required", 401);
-  }
+  validateUser(currentUser);
 
-  const filter = {};
-
-  // Users see their owned or assigned tasks.
-  // Admins can see all tasks.
-  if (currentUser.role !== "admin") {
-    filter.$and = [
-      {
-        $or: [{ createdBy: currentUser.id }, { assignedTo: currentUser.id }],
-      },
-    ];
-  }
+  const filter = { $and: [taskVisibility(currentUser)] };
 
   // Status filtering
   if (status) {
@@ -198,9 +183,7 @@ const getTaskById = async (id, currentUser) => {
     throw createError("Invalid task ID", 400);
   }
 
-  if (!currentUser?.id) {
-    throw createError("Authentication required", 401);
-  }
+  validateUser(currentUser);
 
   const task = await Task.findById(id);
 
@@ -221,13 +204,12 @@ const getTaskById = async (id, currentUser) => {
 // ==========================================
 
 const updateTask = async (id, updateData, currentUser) => {
+  updateData = taskFields(updateData);
   if (!mongoose.isValidObjectId(id)) {
     throw createError("Invalid task ID", 400);
   }
 
-  if (!currentUser?.id) {
-    throw createError("Authentication required", 401);
-  }
+  validateUser(currentUser);
 
   const task = await Task.findById(id);
 
@@ -247,39 +229,18 @@ const updateTask = async (id, updateData, currentUser) => {
           createdBy: currentUser.id,
         };
 
-  // Capture previous status before updating.
+  // Validate casting/defaults before creating an event snapshot.
   const previousStatus = task.status;
   const previousPriority = task.priority;
-  const updatedTask = await Task.findOneAndUpdate(
-    permissionFilter,
-    updateData,
-    {
-      returnDocument: "after",
-      runValidators: true,
-    },
-  );
-
-  if (!updatedTask) {
-    return null;
-  }
-
-  // Emit taskUpdated event.
-  emitTaskEvent("taskUpdated", updatedTask, currentUser.id, {
-    previousStatus,
-    newStatus: updatedTask.status,
-    previousPriority,
-    newPriority: updatedTask.priority,
-    updatedFields: Object.keys(updateData),
-  });
-
-  // Emit taskCompleted only when transitioning
-  // from another status to completed.
-  if (previousStatus !== "completed" && updatedTask.status === "completed") {
-    emitTaskEvent("taskCompleted", updatedTask, currentUser.id, {
-      previousStatus,
-      newStatus: "completed",
-    });
-  }
+  task.set(updateData);
+  await task.validate();
+  const fields = Object.fromEntries(Object.keys(updateData).map(key => [key, task.get(key)]));
+  if (Object.hasOwn(updateData, "dueDate") || Object.hasOwn(updateData, "status")) Object.assign(fields, { isOverdue: false, overdueAt: null });
+  const events = [makeEvent("taskUpdated", task, currentUser.id, { previousStatus, newStatus: task.status, previousPriority, newPriority: task.priority, updatedFields: Object.keys(updateData) })];
+  if (previousStatus !== "completed" && task.status === "completed") events.push(makeEvent("taskCompleted", task, currentUser.id, { previousStatus, newStatus: "completed" }));
+  const updatedTask = await Task.findOneAndUpdate(mutationFilter(permissionFilter, task), { $set: fields, $inc: { __v: 1 }, $push: { pendingEvents: { $each: events } } }, { returnDocument: "after", runValidators: true });
+  if (!updatedTask) await mutationConflict(id);
+  await flushBestEffort(updatedTask._id);
 
   return updatedTask;
 };
@@ -294,9 +255,7 @@ const deleteTask = async (id, currentUser) => {
     throw createError("Invalid task ID", 400);
   }
 
-  if (!currentUser?.id) {
-    throw createError("Authentication required", 401);
-  }
+  validateUser(currentUser);
 
   const task = await Task.findById(id);
 
@@ -316,7 +275,11 @@ const deleteTask = async (id, currentUser) => {
           createdBy: currentUser.id,
         };
 
-  return Task.findOneAndDelete(permissionFilter);
+  // Do not delete a task while its durable events are still awaiting delivery.
+  await flushTaskEvents(id);
+  const deleted = await Task.findOneAndDelete({ ...permissionFilter, "pendingEvents.0": { $exists: false } });
+  if (!deleted && await Task.exists({ _id: id })) throw createError("Task events are awaiting delivery; retry deletion", 409);
+  return deleted;
 };
 
 // ==========================================
@@ -332,9 +295,7 @@ const assignTask = async (taskId, assignedTo, currentUser) => {
     throw createError("Invalid task or user ID", 400);
   }
 
-  if (!currentUser?.id) {
-    throw createError("Authentication required", 401);
-  }
+  validateUser(currentUser);
 
   const task = await Task.findById(taskId);
 
@@ -361,27 +322,11 @@ const assignTask = async (taskId, assignedTo, currentUser) => {
         };
 
   const previousAssignee = task.assignedTo;
-
-  const updatedTask = await Task.findOneAndUpdate(
-    permissionFilter,
-    {
-      assignedTo: user._id,
-    },
-    {
-      returnDocument: "after",
-      runValidators: true,
-    },
-  );
-
-  if (!updatedTask) {
-    return null;
-  }
-
-  // Emit assignment event.
-  emitTaskEvent("taskAssigned", updatedTask, currentUser.id, {
-    previousAssignee,
-    assignedTo: user._id,
-  });
+  task.assignedTo = user._id;
+  const event = makeEvent("taskAssigned", task, currentUser.id, { previousAssignee, assignedTo: user._id });
+  const updatedTask = await Task.findOneAndUpdate(mutationFilter(permissionFilter, task), { $set: { assignedTo: user._id, isOverdue: false, overdueAt: null }, $inc: { __v: 1 }, $push: { pendingEvents: event } }, { returnDocument: "after", runValidators: true });
+  if (!updatedTask) await mutationConflict(taskId);
+  await flushBestEffort(updatedTask._id);
 
   return updatedTask;
 };

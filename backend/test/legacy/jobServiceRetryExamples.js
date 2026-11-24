@@ -7,18 +7,18 @@ const {
   jobQueue,
   JOB_TYPES,
   JOB_STATUS,
-} = require("../queues/jobQueue");
+} = require("../../src/queues/jobQueue");
 
 const {
   getJobs,
   getJobById,
   getJobStats,
-} = require("../services/jobService");
+} = require("../../src/services/jobService");
 
 const {
   RetryableError,
   NonRetryableError,
-} = require("../utils/jobErrors");
+} = require("../../src/utils/jobErrors");
 
 // ==========================================
 // TEST USERS

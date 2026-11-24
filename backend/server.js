@@ -1,9 +1,19 @@
+const logger = require("./src/utils/logger");
 
 require("dotenv").config();
+process.env.JOB_QUEUE_MODE = "mongo";
 
 const mongoose = require("mongoose");
+const { validateEnvironment } = require("./src/config/env");
+const { acquireRuntimeLease, releaseRuntimeLease } = require("./src/config/runtimeLease");
+const Task = require("./src/models/taskModel");
+const User = require("./src/models/userModel");
 
 const app = require("./src/app");
+const { jobQueue } = require("./src/queues/jobQueue");
+const { startOutbox, stopOutbox } = require("./src/events/taskOutbox");
+const BackgroundJob = require("./src/models/backgroundJobModel");
+const { updateExportFailure } = require("./src/services/exportJobService");
 
 const connectDB = require("./src/config/db");
 
@@ -44,7 +54,9 @@ async function startServer() {
 
     // 1. Connect to MongoDB.
 
+    try { validateEnvironment(); } catch (error) { logger.error(error.message); throw error; }
     await connectDB();
+    await acquireRuntimeLease();
 
     // 2. Initialize database models.
 
@@ -59,51 +71,57 @@ async function startServer() {
     await Promise.all([
       Notification.createIndexes(),
       TaskActivity.createIndexes(),
-      Export.createIndexes()
+      Export.createIndexes(),
+      Task.createIndexes(),
+      User.createIndexes()
     ]);
 
-    console.log("Notification indexes initialized");
+    logger.info("Notification indexes initialized");
 
-    console.log("Task activity indexes initialized");
+    logger.info("Task activity indexes initialized");
 
-    console.log("Background job idempotency indexes initialized");
+    logger.info("Background job idempotency indexes initialized");
 
-    console.log("Export indexes initialized");
+    logger.info("Export indexes initialized");
+
+    await BackgroundJob.createIndexes();
+    await jobQueue.recoverInterrupted(updateExportFailure);
+    // A crash between export metadata insert and job insert can leave an orphan.
+    for await (const record of Export.find({ status: { $in: ["pending", "processing", "retrying"] } }).lean().cursor()) {
+      const job = await jobQueue.getJob(record.backgroundJobId);
+      if (!job || job.status === "failed") await Export.updateOne({ _id: record._id, status: { $in: ["pending", "processing", "retrying"] } }, { $set: { status: "failed", error: "Export interrupted; submit again", failedAt: new Date(), completedAt: null } });
+    }
 
     // 4. Initialize file storage.
     // Milestone 10: File Export and Reports.
 
     await initializeFileStorage();
 
-    console.log("Export file storage initialized");
+    logger.info("Export file storage initialized");
 
     // 5. Start Express server.
 
     server = app.listen(PORT, () => {
 
-      console.log(
-        `Server running on http://localhost:${PORT}`
-      );
+      logger.info(`Server running on http://localhost:${PORT}`);
 
       // 6. Start reminder scheduler.
       // Milestone 7.
 
-      startReminderJob();
+      if (process.env.ENABLE_REMINDER_JOB !== "false") startReminderJob();
 
       // 7. Start background worker.
       // Milestone 8: Background processing.
       // Milestone 9: Retry and failure handling.
 
       jobWorker.start();
+      startOutbox();
 
     });
 
     server.on("error", (error) => {
 
-      console.error(
-        "HTTP server error:",
-        error.message
-      );
+      logger.error("HTTP server error", error);
 
       void shutdown("SERVER_ERROR", 1);
 
@@ -111,10 +129,7 @@ async function startServer() {
 
   } catch (error) {
 
-    console.error(
-      "Server startup failed:",
-      error.message
-    );
+    logger.error("Server startup failed", error);
 
     await shutdown("STARTUP_ERROR", 1);
 
@@ -134,15 +149,15 @@ async function shutdown(signal, exitCode = 0) {
 
   isShuttingDown = true;
 
-  console.log(`\n${signal} received`);
+  logger.info("\\n[redacted] received");
 
-  console.log("Starting graceful shutdown...");
+  logger.info("Starting graceful shutdown...");
 
   // Prevent indefinite shutdown.
 
   const forceExitTimer = setTimeout(() => {
 
-    console.error("Graceful shutdown timed out");
+    logger.error("Graceful shutdown timed out");
 
     process.exit(1);
 
@@ -152,7 +167,7 @@ async function shutdown(signal, exitCode = 0) {
 
     // 1. Stop future reminder checks.
 
-    stopReminderJob();
+    const reminderStopped = stopReminderJob();
 
     // 2. Stop accepting new HTTP requests.
 
@@ -176,31 +191,31 @@ async function shutdown(signal, exitCode = 0) {
 
       });
 
-      console.log("HTTP server stopped");
+      logger.info("HTTP server stopped");
 
     }
 
     // 3. Stop job consumption and wait
     // for currently executing jobs.
 
+    await reminderStopped;
+    await stopOutbox();
     await jobWorker.stop();
 
     // 4. Disconnect MongoDB.
 
+    await releaseRuntimeLease();
     await mongoose.disconnect();
 
-    console.log("MongoDB disconnected");
+    logger.info("MongoDB disconnected");
 
-    console.log("Graceful shutdown completed");
+    logger.info("Graceful shutdown completed");
 
     process.exitCode = exitCode;
 
   } catch (error) {
 
-    console.error(
-      "Shutdown error:",
-      error.message
-    );
+    logger.error("Shutdown error", error);
 
     process.exitCode = 1;
 

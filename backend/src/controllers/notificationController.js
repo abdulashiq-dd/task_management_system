@@ -7,13 +7,14 @@ const notificationService = require("../services/notificationService");
 
 const getNotifications = async (req, res, next) => {
   try {
-    const notifications =
-      await notificationService.getUserNotifications(req.user.id);
+    const { notifications, pagination } =
+      await notificationService.getUserNotifications(req.user.id, req.query);
 
     res.status(200).json({
       message: "Notifications fetched successfully",
       count: notifications.length,
       notifications,
+      pagination,
     });
   } catch (error) {
     next(error);

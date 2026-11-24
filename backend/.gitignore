@@ -1,3 +1,7 @@
-
-# Generated export and report files
 /exports/
+/node_modules/
+/.env
+/.env.*
+!/.env.example
+/coverage/
+/logs/

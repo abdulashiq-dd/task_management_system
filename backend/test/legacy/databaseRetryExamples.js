@@ -1,33 +1,34 @@
 
 require("dotenv").config();
+if (!/\/task_hardening_test_[a-f0-9]{32}(?:\?|$)/.test(process.env.MONGO_URI || "")) throw new Error("Run database tests through npm test; an isolated database is required.");
 
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
 
-const Notification = require("../models/notificationModel");
-const TaskActivity = require("../models/taskActivityModel");
+const Notification = require("../../src/models/notificationModel");
+const TaskActivity = require("../../src/models/taskActivityModel");
 
 const {
   JobQueue,
   JOB_TYPES,
   JOB_STATUS,
-} = require("../queues/jobQueue");
+} = require("../../src/queues/jobQueue");
 
 const {
   JobWorker,
-} = require("../workers/jobWorker");
+} = require("../../src/workers/jobWorker");
 
 const {
   executeJob,
-} = require("../workers/jobHandlers");
+} = require("../../src/workers/jobHandlers");
 
 const {
   RetryableError,
-} = require("../utils/jobErrors");
+} = require("../../src/utils/jobErrors");
 
 const {
   sleep,
-} = require("../utils/retry");
+} = require("../../src/utils/retry");
 
 // ==========================================
 // TEST CONFIGURATION
@@ -285,7 +286,7 @@ async function runTests() {
     await mongoose.connect(uri);
 
     if (
-      mongoose.connection.name !== "task_management"
+      !/^task_hardening_test_[a-f0-9]{32}$/.test(mongoose.connection.name)
     ) {
       throw new Error("Unexpected test database");
     }
@@ -322,7 +323,7 @@ async function runTests() {
 
       if (
         mongoose.connection.readyState === 1 &&
-        mongoose.connection.name === "task_management" &&
+        /^task_hardening_test_[a-f0-9]{32}$/.test(mongoose.connection.name) &&
         testJobIds.length > 0
       ) {
 

@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
@@ -7,10 +8,7 @@ const { randomUUID } = require("node:crypto");
 // 1. STORAGE CONFIGURATION
 // ==========================================
 
-const EXPORT_ROOT = path.resolve(
-  __dirname,
-  "../../exports"
-);
+const EXPORT_ROOT = process.env.EXPORT_ROOT ? path.resolve(process.env.EXPORT_ROOT) : path.resolve(__dirname, "../../exports");
 
 const FILE_TYPES = Object.freeze({
   JSON: "json",
@@ -68,7 +66,7 @@ async function initializeFileStorage() {
 
   );
 
-  console.log("[File Storage] Directories initialized");
+  logger.info("[File Storage] Directories initialized");
 
   return STORAGE_DIRECTORIES;
 

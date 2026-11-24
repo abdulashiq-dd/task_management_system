@@ -3,7 +3,7 @@ const authService = require("../services/authService");
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password } = req.body || {};
 
     if (
       typeof name !== "string" ||
@@ -43,10 +43,10 @@ const login = async (req, res, next) => {
       typeof email !== "string" ||
       !email.trim() ||
       typeof password !== "string" ||
-      !password
+      !password || Buffer.byteLength(password, "utf8") > 72
     ) {
       return res.status(400).json({
-        message: "Email and password are required"
+        message: "Email and a password of at most 72 bytes are required"
       });
     }
 

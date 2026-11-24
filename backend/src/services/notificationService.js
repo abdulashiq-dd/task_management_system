@@ -2,6 +2,8 @@
 const mongoose = require("mongoose");
 
 const Notification = require("../models/notificationModel");
+const { pagination, pageInfo } = require("../utils/pagination");
+const PUBLIC_FIELDS = "user task type message isRead reminderDueDate createdAt updatedAt";
 
 const {
   createIdempotent,
@@ -11,11 +13,7 @@ const {
 // HELPER - ERROR HANDLING
 // ==========================================
 
-const createError = (message, statusCode) => {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-};
+const { createError } = require("../utils/httpError");
 
 // ==========================================
 // 1. CREATE NOTIFICATION
@@ -74,17 +72,19 @@ const createNotification = async ({
 // 2. GET USER NOTIFICATIONS
 // ==========================================
 
-const getUserNotifications = async (userId) => {
+const getUserNotifications = async (userId, query = {}) => {
 
   if (!mongoose.isValidObjectId(userId)) {
     throw createError("Invalid user ID", 400);
   }
 
-  return Notification.find({
-    user: userId,
-  }).sort({
-    createdAt: -1,
-  });
+  const { page, limit, skip } = pagination(query);
+  const filter = { user: userId };
+  const [notifications, total] = await Promise.all([
+    Notification.find(filter).select(PUBLIC_FIELDS).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
+    Notification.countDocuments(filter),
+  ]);
+  return { notifications, pagination: pageInfo(page, limit, total) };
 };
 
 // ==========================================

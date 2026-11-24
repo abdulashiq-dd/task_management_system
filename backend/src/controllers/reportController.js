@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const reportService = require(
   "../services/reportService"
@@ -55,13 +56,7 @@ async function generateReport(req, res) {
 
     const statusCode = error.statusCode || 500;
 
-    console.error(
-
-      "[Report Controller] Error:",
-
-      error.message
-
-    );
+    logger.error("[Report Controller] Error", error);
 
     return res.status(statusCode).json({
 

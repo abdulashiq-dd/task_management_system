@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const fs = require("node:fs");
 const fsPromises = require("node:fs/promises");
@@ -177,14 +178,9 @@ async function exportTasksAsJSON(
       fileName
     );
 
-    console.log(
-      "[Export Service] JSON export completed"
-    );
+    logger.info("[Export Service] JSON export completed");
 
-    console.log(
-      "[Export Service] Records:",
-      totalRecords
-    );
+    logger.info("[Export Service] Records");
 
     return {
       type: FILE_TYPES.JSON,
@@ -331,14 +327,9 @@ async function exportTasksAsCSV(
       fileName
     );
 
-    console.log(
-      "[Export Service] CSV export completed"
-    );
+    logger.info("[Export Service] CSV export completed");
 
-    console.log(
-      "[Export Service] Records:",
-      totalRecords
-    );
+    logger.info("[Export Service] Records");
 
     return {
       type: FILE_TYPES.CSV,

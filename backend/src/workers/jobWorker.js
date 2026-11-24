@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const {
   jobQueue,
@@ -36,6 +37,7 @@ class JobWorker {
     handler = executeJob,
     concurrency = DEFAULT_CONCURRENCY,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+    timeoutMs = 120000,
   } = {}) {
 
     // Validate configuration.
@@ -66,6 +68,9 @@ class JobWorker {
 
     this.queue = queue;
     this.handler = handler;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new Error("Invalid job timeout");
+    this.timeoutMs = timeoutMs;
+    this.pollPromise = null;
 
     this.concurrency = concurrency;
     this.pollIntervalMs = pollIntervalMs;
@@ -110,9 +115,7 @@ class JobWorker {
 
     if (this.isRunning || this.isStopping) {
 
-      console.log(
-        "[Job Worker] Worker already running or stopping"
-      );
+      logger.info("[Job Worker] Worker already running or stopping");
 
       return false;
 
@@ -120,17 +123,11 @@ class JobWorker {
 
     this.isRunning = true;
 
-    console.log(
-      "[Job Worker] Worker started"
-    );
+    logger.info("[Job Worker] Worker started");
 
-    console.log(
-      `[Job Worker] Concurrency: ${this.concurrency}`
-    );
+    logger.info("[Job Worker] Concurrency: [redacted]");
 
-    console.log(
-      `[Job Worker] Poll interval: ${this.pollIntervalMs} ms`
-    );
+    logger.info("[Job Worker] Poll interval: [redacted] ms");
 
     this.intervalHandle = setInterval(() => {
 
@@ -151,18 +148,26 @@ class JobWorker {
   // ========================================
 
   processQueue() {
+    if (!this.isRunning || this.isStopping || this.pollPromise) return;
+    this.pollPromise = this.pollQueue().catch(error => {
+      logger.error("[Job Worker] Poll failed", error);
+      if (this.queue.persistent) process.exit(1);
+    }).finally(() => { this.pollPromise = null; });
+  }
+
+  async pollQueue() {
 
     if (!this.isRunning || this.isStopping) {
       return;
     }
 
     while (
-      this.activeJobs < this.concurrency
+      this.isRunning && !this.isStopping && this.activeJobs < this.concurrency
     ) {
 
       // Retrieve next available job.
 
-      const job = this.queue.dequeue();
+      const job = this.queue.persistent ? await this.queue.dequeue() : this.queue.dequeue();
 
       if (!job) {
         break;
@@ -183,18 +188,10 @@ class JobWorker {
 
         .catch(async error => {
 
-          console.error(
-
-            "[Job Worker] Unexpected worker error:",
-
-            error instanceof Error
-              ? error.message
-              : String(error)
-
-          );
+          logger.error("[Job Worker] Unexpected worker error", error);
 
           const currentJob =
-            this.queue.getJob(job.id);
+            await this.queue.getJob(job.id);
 
           // Prevent unexpected errors from
           // leaving jobs in processing status.
@@ -209,7 +206,7 @@ class JobWorker {
             );
 
             const failedJob =
-              this.queue.markFailed(
+              await this.queue.markFailed(
 
                 job.id,
 
@@ -237,6 +234,11 @@ class JobWorker {
 
         })
 
+        .catch(error => {
+          logger.error("Worker state persistence failed", error);
+          // No next claim until restart recovers the durable processing job.
+          if (this.queue.persistent) process.exit(1);
+        })
         .finally(() => {
 
           // Release slot after every attempt.
@@ -308,16 +310,10 @@ class JobWorker {
 
     } catch (metadataError) {
 
-      // Keep the worker running even if
-      // MongoDB metadata synchronization fails.
+      // Durable queue must recover both states after a database error.
+      if (this.queue.persistent) throw metadataError;
 
-      console.error(
-
-        "[Job Worker] Export metadata update failed:",
-
-        metadataError.message
-
-      );
+      logger.error("[Job Worker] Export metadata update failed", metadataError);
 
     }
 
@@ -329,13 +325,9 @@ class JobWorker {
 
   async processJob(job) {
 
-    console.log(
-      `[Job Worker] Executing: ${job.type} | ${job.id}`
-    );
+    logger.info("[Job Worker] Executing: [redacted] | [redacted]");
 
-    console.log(
-      `[Job Worker] Attempt ${job.attempts}/${job.maxRetries + 1}`
-    );
+    logger.info("[Job Worker] Attempt [redacted]/[redacted]");
 
     this.stats.totalAttempts++;
 
@@ -351,7 +343,7 @@ class JobWorker {
 
       // Execute actual background operation.
 
-      result = await this.handler(job);
+      result = await this.executeWithDeadline(job);
 
     } catch (error) {
 
@@ -409,7 +401,7 @@ class JobWorker {
       // ====================================
 
       const updatedJob =
-        this.queue.markFailed(
+        await this.queue.markFailed(
 
           job.id,
 
@@ -423,9 +415,7 @@ class JobWorker {
 
       if (!updatedJob) {
 
-        console.error(
-          `[Job Worker] Failed to update job: ${job.id}`
-        );
+        logger.error("[Job Worker] Failed to update job: [redacted]");
 
         return;
 
@@ -441,13 +431,9 @@ class JobWorker {
 
         this.stats.retriesScheduled++;
 
-        console.log(
-          `[Job Worker] Retry scheduled: ${job.id}`
-        );
+        logger.info("[Job Worker] Retry scheduled: [redacted]");
 
-        console.log(
-          `[Job Worker] Retry count: ${job.retryCount}/${job.maxRetries}`
-        );
+        logger.info("[Job Worker] Retry count: [redacted]/[redacted]");
 
         // Release worker slot instead of
         // waiting during retry backoff.
@@ -470,9 +456,7 @@ class JobWorker {
 
         this.stats.totalProcessed++;
 
-        console.error(
-          `[Job Worker] Job permanently failed: ${job.id}`
-        );
+        logger.error("[Job Worker] Job permanently failed: [redacted]");
 
       }
 
@@ -485,7 +469,7 @@ class JobWorker {
     // ======================================
 
     const completedJob =
-      this.queue.markCompleted(
+      await this.queue.markCompleted(
 
         job.id,
 
@@ -495,9 +479,7 @@ class JobWorker {
 
     if (!completedJob) {
 
-      console.error(
-        `[Job Worker] Failed to complete job: ${job.id}`
-      );
+      logger.error("[Job Worker] Failed to complete job: [redacted]");
 
       return;
 
@@ -513,21 +495,39 @@ class JobWorker {
 
       this.stats.recovered++;
 
-      console.log(
-        `[Job Worker] Job recovered after retry: ${job.id}`
-      );
+      logger.info("[Job Worker] Job recovered after retry: [redacted]");
 
     }
 
-    console.log(
-      `[Job Worker] Job succeeded: ${job.id}`
-    );
+    logger.info("[Job Worker] Job succeeded: [redacted]");
 
   }
 
   // ========================================
   // 5. GET WORKER STATISTICS
   // ========================================
+
+  async executeWithDeadline(job) {
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(() => this.handler(job)),
+        new Promise((_, reject) => { timer = setTimeout(() => {
+          if (this.queue.persistent) {
+            // Promise.race cannot cancel MongoDB/filesystem writes. Stop the process
+            // instead of allowing a timed-out handler to race another attempt.
+            // The durable processing job is recovered on next startup.
+            logger.error("[Job Worker] Deadline exceeded; supervisor restart required");
+            process.exit(1);
+          }
+          const error = new Error("Job execution deadline exceeded");
+          error.name = "JobTimeoutError";
+          error.retryable = false;
+          reject(error);
+        }, this.timeoutMs); }),
+      ]);
+    } finally { clearTimeout(timer); }
+  }
 
   getStats() {
 
@@ -551,7 +551,7 @@ class JobWorker {
 
       pollIntervalMs: this.pollIntervalMs,
 
-      delayedJobs: this.queue.getDelayedCount(),
+      delayedJobs: this.queue.persistent ? null : this.queue.getDelayedCount(),
 
       ...this.stats
 
@@ -594,9 +594,7 @@ class JobWorker {
 
     }
 
-    console.log(
-      "[Job Worker] Waiting for active jobs to finish..."
-    );
+    logger.info("[Job Worker] Waiting for active jobs to finish...");
 
     this.stopPromise =
       this.finishStopping();
@@ -621,6 +619,8 @@ class JobWorker {
 
   async finishStopping() {
 
+    // Wait for any in-progress claim before collecting active promises.
+    await this.pollPromise;
     // Wait for all active jobs to settle.
 
     await Promise.allSettled(
@@ -629,21 +629,11 @@ class JobWorker {
 
     );
 
-    console.log(
+    logger.info("[Job Worker] Pending jobs remaining: [redacted]");
 
-      `[Job Worker] Pending jobs remaining: ${this.queue.getPendingCount()}`
+    logger.info("[Job Worker] Delayed retry jobs remaining: [redacted]");
 
-    );
-
-    console.log(
-
-      `[Job Worker] Delayed retry jobs remaining: ${this.queue.getDelayedCount()}`
-
-    );
-
-    console.log(
-      "[Job Worker] Worker stopped"
-    );
+    logger.info("[Job Worker] Worker stopped");
 
   }
 

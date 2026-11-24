@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const jobService = require("../services/jobService");
 
@@ -8,10 +9,7 @@ const jobService = require("../services/jobService");
 function handleError(res, error) {
   const statusCode = error.statusCode || 500;
 
-  console.error(
-    "[Job Controller] Error:",
-    error.message
-  );
+  logger.error("[Job Controller] Error", error);
 
   return res.status(statusCode).json({
     success: false,
@@ -27,7 +25,7 @@ function handleError(res, error) {
 // GET /api/jobs
 // ==========================================
 
-function getJobs(req, res) {
+async function getJobs(req, res) {
   try {
     const currentUser = {
       id: req.user.id,
@@ -37,16 +35,22 @@ function getJobs(req, res) {
     const filters = {
       status: req.query.status,
       type: req.query.type,
+      page: req.query.page,
+      limit: req.query.limit,
     };
 
-    const jobs = jobService.getJobs(
+    const result = await jobService.getJobs(
       currentUser,
       filters
     );
 
+    const { pagination, pageInfo } = require("../utils/pagination");
+    const page = pagination(filters);
+    const jobs = Array.isArray(result) ? result.slice(page.skip, page.skip + page.limit) : result.jobs;
     return res.status(200).json({
       success: true,
       message: "Jobs fetched successfully",
+      pagination: Array.isArray(result) ? pageInfo(page.page, page.limit, result.length) : result.pagination,
       count: jobs.length,
       jobs,
     });
@@ -60,14 +64,14 @@ function getJobs(req, res) {
 // GET /api/jobs/:id
 // ==========================================
 
-function getJobById(req, res) {
+async function getJobById(req, res) {
   try {
     const currentUser = {
       id: req.user.id,
       role: req.user.role,
     };
 
-    const job = jobService.getJobById(
+    const job = await jobService.getJobById(
       req.params.id,
       currentUser
     );
@@ -87,7 +91,7 @@ function getJobById(req, res) {
 // GET /api/jobs/stats
 // ==========================================
 
-function getJobStats(req, res) {
+async function getJobStats(req, res) {
   try {
     const currentUser = {
       id: req.user.id,
@@ -95,7 +99,7 @@ function getJobStats(req, res) {
     };
 
     const stats =
-      jobService.getJobStats(currentUser);
+      await jobService.getJobStats(currentUser);
 
     return res.status(200).json({
       success: true,

@@ -1,4 +1,5 @@
 
+const logger = require("../utils/logger");
 const {
   runReminderCheck,
 } = require("../services/reminderService");
@@ -8,17 +9,16 @@ const CHECK_INTERVAL_MS = 60 * 1000;
 
 let intervalId = null;
 let isRunning = false;
+let activeCheck = null;
 
 // ==========================================
 // 1. EXECUTE REMINDER CHECK
 // ==========================================
 
-const executeReminderCheck = async () => {
+const runCheck = async () => {
   // Prevent overlapping executions.
   if (isRunning) {
-    console.log(
-      "[Reminder Job] Previous check still running. Skipping."
-    );
+    logger.info("[Reminder Job] Previous check still running. Skipping.");
     return;
   }
 
@@ -28,20 +28,19 @@ const executeReminderCheck = async () => {
     const summary = await runReminderCheck();
 
     if (summary.errors.length > 0) {
-      console.error(
-        "[Reminder Job] Partial failures:",
-        summary.errors
-      );
+      logger.error("[Reminder Job] Partial failures");
     }
   } catch (error) {
-    console.error(
-      "[Reminder Job] Execution failed:",
-      error.message
-    );
+    logger.error("Reminder execution failed", error);
   } finally {
     isRunning = false;
   }
 };
+
+function executeReminderCheck() {
+  if (!activeCheck) activeCheck = runCheck().finally(() => { activeCheck = null; });
+  return activeCheck;
+}
 
 // ==========================================
 // 2. START REMINDER JOB
@@ -50,19 +49,13 @@ const executeReminderCheck = async () => {
 const startReminderJob = () => {
   // Prevent multiple intervals.
   if (intervalId !== null) {
-    console.log(
-      "[Reminder Job] Scheduler already running."
-    );
+    logger.info("[Reminder Job] Scheduler already running.");
     return;
   }
 
-  console.log(
-    "[Reminder Job] Scheduler started."
-  );
+  logger.info("[Reminder Job] Scheduler started.");
 
-  console.log(
-    "[Reminder Job] Checking tasks every 60 seconds."
-  );
+  logger.info("[Reminder Job] Checking tasks every 60 seconds.");
 
   // Execute immediately when the server starts.
   void executeReminderCheck();
@@ -71,22 +64,22 @@ const startReminderJob = () => {
   intervalId = setInterval(() => {
     void executeReminderCheck();
   }, CHECK_INTERVAL_MS);
+  intervalId.unref();
 };
 
 // ==========================================
 // 3. STOP REMINDER JOB
 // ==========================================
 
-const stopReminderJob = () => {
+const stopReminderJob = async () => {
   if (intervalId !== null) {
     clearInterval(intervalId);
 
     intervalId = null;
 
-    console.log(
-      "[Reminder Job] Scheduler stopped."
-    );
+    logger.info("[Reminder Job] Scheduler stopped.");
   }
+  await activeCheck;
 };
 
 // ==========================================

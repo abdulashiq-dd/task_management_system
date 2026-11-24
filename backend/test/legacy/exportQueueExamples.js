@@ -1,49 +1,51 @@
 
 require("dotenv").config();
+if (!/\/task_hardening_test_[a-f0-9]{32}(?:\?|$)/.test(process.env.MONGO_URI || "")) throw new Error("Run database tests through npm test; an isolated database is required.");
 
 const mongoose = require("mongoose");
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 
-const Task = require("../models/taskModel");
+const Task = require("../../src/models/taskModel");
+const User = require("../../src/models/userModel");
 
 const {
   Export,
   EXPORT_STATUS
-} = require("../models/exportModel");
+} = require("../../src/models/exportModel");
 
 const {
   JobQueue,
   JOB_TYPES,
   JOB_STATUS
-} = require("../queues/jobQueue");
+} = require("../../src/queues/jobQueue");
 
 const {
   JobWorker
-} = require("../workers/jobWorker");
+} = require("../../src/workers/jobWorker");
 
 const {
   executeJob
-} = require("../workers/jobHandlers");
+} = require("../../src/workers/jobHandlers");
 
 const {
   queueExportJob
-} = require("../services/exportJobService");
+} = require("../../src/services/exportJobService");
 
 const {
   RetryableError,
   NonRetryableError
-} = require("../utils/jobErrors");
+} = require("../../src/utils/jobErrors");
 
 const {
   FILE_TYPES,
   fileExists,
   deleteFile
-} = require("../config/fileStorage");
+} = require("../../src/config/fileStorage");
 
 const {
   sleep
-} = require("../utils/retry");
+} = require("../../src/utils/retry");
 
 // ==========================================
 // 1. WAIT FOR JOB STATUS
@@ -180,6 +182,7 @@ async function runTests() {
       process.env.MONGO_URI
     );
 
+    await User.create({ _id: userId, name: "Export test user", email: `${userId}@example.invalid`, password: "fixture-not-used-for-login", role: "user" });
     console.log("MongoDB connected");
 
     await Export.init();
@@ -889,7 +892,8 @@ async function runTests() {
 
     } finally {
 
-      await mongoose.disconnect();
+      if (mongoose.connection.readyState === 1) await User.deleteOne({ _id: userId });
+        await mongoose.disconnect();
 
       console.log(
         "MongoDB disconnected"

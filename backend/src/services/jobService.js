@@ -1,5 +1,6 @@
 
 const mongoose = require("mongoose");
+const { pagination, pageInfo } = require("../utils/pagination");
 
 const {
   jobQueue,
@@ -15,44 +16,13 @@ const {
 // HELPER - ERROR HANDLING
 // ==========================================
 
-function createError(message, statusCode) {
-  const error = new Error(message);
-
-  error.statusCode = statusCode;
-
-  return error;
-}
+const { createError } = require("../utils/httpError");
 
 // ==========================================
 // HELPER - VALIDATE AUTHENTICATED USER
 // ==========================================
 
-function validateUser(currentUser) {
-
-  if (!currentUser || !currentUser.id) {
-
-    throw createError(
-      "Authentication required",
-      401
-    );
-  }
-
-  if (!mongoose.isValidObjectId(currentUser.id)) {
-
-    throw createError(
-      "Invalid user ID",
-      400
-    );
-  }
-
-  if (!["user", "admin"].includes(currentUser.role)) {
-
-    throw createError(
-      "Access denied",
-      403
-    );
-  }
-}
+const { validateUser } = require("../utils/taskAccess");
 
 // ==========================================
 // HELPER - FORMAT PUBLIC JOB RESPONSE
@@ -163,6 +133,7 @@ function getAccessibleJobs(currentUser) {
 // ==========================================
 
 function getJobs(currentUser, filters = {}) {
+  if (jobQueue.persistent) return getJobsPersistent(currentUser, filters);
 
   let jobs = getAccessibleJobs(currentUser);
 
@@ -221,6 +192,7 @@ function getJobs(currentUser, filters = {}) {
 // ==========================================
 
 function getJobById(jobId, currentUser) {
+  if (jobQueue.persistent) return getJobByIdPersistent(jobId, currentUser);
 
   validateUser(currentUser);
 
@@ -268,6 +240,7 @@ function getJobById(jobId, currentUser) {
 // ==========================================
 
 function getJobStats(currentUser) {
+  if (jobQueue.persistent) return getJobStatsPersistent(currentUser);
 
   const jobs = getAccessibleJobs(currentUser);
 
@@ -358,6 +331,38 @@ function getJobStats(currentUser) {
 // EXPORT SERVICES
 // ==========================================
 
+function ownerFilter(currentUser) {
+  validateUser(currentUser);
+  return currentUser.role === "admin" ? {} : { userId: String(currentUser.id) };
+}
+async function getJobsPersistent(currentUser, filters) {
+  const filter = ownerFilter(currentUser);
+  if (filters.status !== undefined) {
+    if (!Object.values(JOB_STATUS).includes(filters.status)) throw createError("Invalid job status", 400);
+    filter.status = filters.status;
+  }
+  if (filters.type !== undefined) {
+    if (!Object.values(JOB_TYPES).includes(filters.type)) throw createError("Invalid job type", 400);
+    filter.type = filters.type;
+  }
+  const page = pagination(filters);
+  const result = await jobQueue.list(filter, page);
+  return { jobs: result.jobs.map(job => formatJob(job)), pagination: pageInfo(page.page, page.limit, result.total) };
+}
+async function getJobByIdPersistent(jobId, currentUser) {
+  const filter = ownerFilter(currentUser);
+  if (typeof jobId !== "string" || !jobId.trim()) throw createError("Job ID is required", 400);
+  const job = await jobQueue.getJob(jobId);
+  if (!job || (filter.userId && filter.userId !== job.userId)) throw createError("Job not found", 404);
+  const publicJob = formatJob(job, true);
+  if (currentUser.role !== "admin" && [JOB_TYPES.REPORT_GENERATION, JOB_TYPES.JSON_EXPORT, JOB_TYPES.CSV_EXPORT].includes(job.type) && publicJob.result?.generatedRole !== "user") publicJob.result = null;
+  return publicJob;
+}
+async function getJobStatsPersistent(currentUser) {
+  const result = await jobQueue.statistics(ownerFilter(currentUser));
+  if (currentUser.role === "admin") result.worker = { ...jobWorker.getStats(), delayedJobs: await jobQueue.getDelayedCount() };
+  return result;
+}
 module.exports = {
 
   getJobs,

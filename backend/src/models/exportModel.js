@@ -129,6 +129,8 @@ const exportSchema = new mongoose.Schema(
       }
     },
 
+    generatedRole: { type: String, enum: ["user", "admin"], default: null },
+
     size: {
       type: Number,
       default: 0,

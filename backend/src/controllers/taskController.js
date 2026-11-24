@@ -1,4 +1,5 @@
 const taskService = require("../services/taskService");
+const { taskFields } = require("../utils/taskFields");
 
 // ==========================================
 // 1. CREATE TASK
@@ -7,12 +8,9 @@ const taskService = require("../services/taskService");
 const createTask = async (req, res, next) => {
   try {
     // Include the authenticated user as the creator
-    const taskData = {
-      ...req.body,
-      createdBy: req.user.id,
-    };
+    const taskData = taskFields(req.body);
 
-    const newTask = await taskService.createTask(taskData);
+    const newTask = await taskService.createTask(taskData, req.user);
 
     return res.status(201).json({
       message: "Task created successfully",
@@ -218,29 +216,7 @@ const updateTask = async (req, res, next) => {
   try {
     const id = req.params.id;
 
-    // Only allow these fields to be updated
-    const allowedFields = [
-      "title",
-      "description",
-      "status",
-      "priority",
-      "dueDate",
-      "tags",
-    ];
-
-    const updateData = {};
-
-    for (const field of allowedFields) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
-        updateData[field] = req.body[field];
-      }
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        message: "Provide at least one valid field to update",
-      });
-    }
+    const updateData = taskFields(req.body);
 
     const updatedTask = await taskService.updateTask(id, updateData, req.user);
 
@@ -301,6 +277,7 @@ const assignTask = async (req, res, next) => {
       req.user,
     );
 
+    if (!updatedTask) return res.status(404).json({ message: "Task not found" });
     return res.status(200).json({
       message: "Task assigned successfully",
       task: updatedTask,

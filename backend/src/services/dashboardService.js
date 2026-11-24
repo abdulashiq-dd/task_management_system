@@ -1,197 +1,34 @@
-const mongoose = require("mongoose");
 const Task = require("../models/taskModel");
 const TaskActivity = require("../models/taskActivityModel");
+const { taskVisibility } = require("../utils/taskAccess");
 
-// ==========================================
-// HELPER — ERROR HANDLING
-// ==========================================
-
-const createError = (message, statusCode) => {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-};
-
-// ==========================================
-// HELPER — USER TASK VISIBILITY
-// ==========================================
-
-const getTaskFilter = (currentUser) => {
-  if (!currentUser?.id) {
-    throw createError("Authentication required", 401);
-  }
-
-  if (currentUser.role === "admin") {
-    return {};
-  }
-
-  if (!mongoose.isValidObjectId(currentUser.id)) {
-    throw createError("Invalid user ID", 400);
-  }
-
-  const userId = new mongoose.Types.ObjectId(
-    currentUser.id
-  );
-
-  return {
-    $or: [
-      { createdBy: userId },
-      { assignedTo: userId },
-    ],
-  };
-};
-
-// ==========================================
-// 1. TOTAL TASKS
-// ==========================================
-
-const getTotalTasks = async (filter) => {
-  return Task.countDocuments(filter);
-};
-
-// ==========================================
-// 2. COMPLETED TASKS
-// ==========================================
-
-const getCompletedTasks = async (filter) => {
-  return Task.countDocuments({
-    $and: [
-      filter,
-      { status: "completed" },
-    ],
-  });
-};
-
-// ==========================================
-// 3. PENDING TASKS
-// ==========================================
-
-const getPendingTasks = async (filter) => {
-  return Task.countDocuments({
-    $and: [
-      filter,
-      { status: "pending" },
-    ],
-  });
-};
-
-// ==========================================
-// 4. OVERDUE TASKS
-// ==========================================
-
-const getOverdueTasks = async (filter) => {
+async function getDashboardStats(currentUser) {
+  const filter = taskVisibility(currentUser);
   const now = new Date();
-
-  return Task.countDocuments({
-    $and: [
-      filter,
-      {
-        status: {
-          $in: ["pending", "in_progress"],
-        },
-        dueDate: {
-          $ne: null,
-          $lte: now,
-        },
-      },
-    ],
-  });
-};
-// ==========================================
-// 5. TASKS BY PRIORITY
-// ==========================================
-
-const getTasksByPriority = async (filter) => {
-  const result = await Task.aggregate([
-    {
-      $match: filter,
-    },
-    {
-      $group: {
-        _id: "$priority",
-        count: { $sum: 1 },
-      },
-    },
+  const [counts, recentActivity] = await Promise.all([
+    Task.aggregate([
+      { $match: filter },
+      { $group: {
+        _id: null,
+        totalTasks: { $sum: 1 },
+        completedTasks: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+        pendingTasks: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
+        overdueTasks: { $sum: { $cond: [{ $and: [{ $in: ["$status", ["pending", "in_progress"]] }, { $ne: [{ $ifNull: ["$dueDate", null] }, null] }, { $lte: ["$dueDate", now] }] }, 1, 0] } },
+        low: { $sum: { $cond: [{ $eq: ["$priority", "low"] }, 1, 0] } },
+        medium: { $sum: { $cond: [{ $eq: ["$priority", "medium"] }, 1, 0] } },
+        high: { $sum: { $cond: [{ $eq: ["$priority", "high"] }, 1, 0] } },
+      } },
+    ]),
+    TaskActivity.aggregate([
+      { $sort: { createdAt: -1, _id: -1 } },
+      // Preserve exclusion of activities for deleted tasks for admins too.
+      { $lookup: { from: Task.collection.name, localField: "task", foreignField: "_id", pipeline: [{ $match: filter }, { $project: { _id: 1 } }], as: "visibleTask" } },
+      { $match: { "visibleTask.0": { $exists: true } } },
+      { $limit: 10 },
+      { $project: { visibleTask: 0, backgroundJobId: 0, __v: 0 } },
+    ]),
   ]);
-
-  const priorityCounts = {
-    low: 0,
-    medium: 0,
-    high: 0,
-  };
-
-  result.forEach((item) => {
-    if (
-      Object.prototype.hasOwnProperty.call(
-        priorityCounts,
-        item._id
-      )
-    ) {
-      priorityCounts[item._id] = item.count;
-    }
-  });
-
-  return priorityCounts;
-};
-
-// ==========================================
-// 6. RECENT ACTIVITY
-// ==========================================
-
-const getRecentActivity = async (filter) => {
-  // Find tasks visible to the current user.
-  const taskIds = await Task.distinct(
-    "_id",
-    filter
-  );
-
-  // Only return activities for those tasks.
-  return TaskActivity.find({
-    task: { $in: taskIds },
-  })
-    .sort({ createdAt: -1, _id: -1 })
-    .limit(10)
-    .lean();
-};
-
-// ==========================================
-// 7. GET DASHBOARD STATISTICS
-// ==========================================
-
-const getDashboardStats = async (currentUser) => {
-  const filter = getTaskFilter(currentUser);
-
-  // Start independent operations concurrently.
-  const [
-    totalTasks,
-    completedTasks,
-    pendingTasks,
-    overdueTasks,
-    tasksByPriority,
-    recentActivity,
-  ] = await Promise.all([
-    getTotalTasks(filter),
-    getCompletedTasks(filter),
-    getPendingTasks(filter),
-    getOverdueTasks(filter),
-    getTasksByPriority(filter),
-    getRecentActivity(filter),
-  ]);
-
-  return {
-    totalTasks,
-    completedTasks,
-    pendingTasks,
-    overdueTasks,
-    tasksByPriority,
-    recentActivity,
-  };
-};
-
-// ==========================================
-// EXPORT SERVICES
-// ==========================================
-
-module.exports = {
-  getDashboardStats,
-};
+  const { totalTasks = 0, completedTasks = 0, pendingTasks = 0, overdueTasks = 0, low = 0, medium = 0, high = 0 } = counts[0] || {};
+  return { totalTasks, completedTasks, pendingTasks, overdueTasks, tasksByPriority: { low, medium, high }, recentActivity };
+}
+module.exports = { getDashboardStats };

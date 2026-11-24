@@ -1,4 +1,5 @@
 const taskEventEmitter = require("./taskEventEmitter");
+const logger = require("../utils/logger");
 
 const eventTypes = [
   "taskCreated",
@@ -8,10 +9,9 @@ const eventTypes = [
 ];
 
 eventTypes.forEach((eventType) => {
+  if (process.env.NODE_ENV !== "development") return;
   taskEventEmitter.on(eventType, (data) => {
-    console.log(`[Task Event] ${eventType}`, {
-      taskId: data.taskId,
-      performedBy: data.performedBy,
-    });
+    if (!data?.taskId || !data?.performedBy) return;
+    logger.debug(`Task event: ${eventType}`);
   });
 });

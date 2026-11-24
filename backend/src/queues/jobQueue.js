@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 
 const { randomUUID } = require("node:crypto");
 
@@ -218,9 +219,7 @@ class JobQueue {
 
     this.pendingJobs.push(job.id);
 
-    console.log(
-      `[Job Queue] Job added: ${job.type} | ${job.id}`
-    );
+    logger.info("[Job Queue] Job added: [redacted] | [redacted]");
 
     return job;
 
@@ -292,13 +291,9 @@ class JobQueue {
 
     job.nextRetryAt = null;
 
-    console.log(
-      `[Job Queue] Processing: ${job.type} | ${job.id}`
-    );
+    logger.info("[Job Queue] Processing: [redacted] | [redacted]");
 
-    console.log(
-      `[Job Queue] Attempt ${job.attempts} of ${job.maxRetries + 1}`
-    );
+    logger.info("[Job Queue] Attempt [redacted] of [redacted]");
 
     return job;
 
@@ -338,13 +333,9 @@ class JobQueue {
     // Preserve lastError and errorHistory
     // for debugging previously failed attempts.
 
-    console.log(
-      `[Job Queue] Completed: ${job.type} | ${job.id}`
-    );
+    logger.info("[Job Queue] Completed: [redacted] | [redacted]");
 
-    console.log(
-      `[Job Queue] Total attempts: ${job.attempts}`
-    );
+    logger.info("[Job Queue] Total attempts: [redacted]");
 
     this.pruneFinishedJobs();
 
@@ -403,13 +394,9 @@ class JobQueue {
 
     job.result = null;
 
-    console.error(
-      `[Job Queue] Attempt ${job.attempts} failed | ${job.id}`
-    );
+    logger.error("[Job Queue] Attempt [redacted] failed | [redacted]");
 
-    console.error(
-      `[Job Queue] Error: ${errorMessage}`
-    );
+    logger.error("[Job Queue] Error: [redacted]");
 
     // Retry only if the error is retryable
     // and retries are still available.
@@ -471,21 +458,13 @@ class JobQueue {
       retryTime
     );
 
-    console.log(
-      `[Job Queue] Retry ${job.retryCount}/${job.maxRetries} scheduled`
-    );
+    logger.info("[Job Queue] Retry [redacted]/[redacted] scheduled");
 
-    console.log(
-      `[Job Queue] Job: ${job.id}`
-    );
+    logger.info("[Job Queue] Job: [redacted]");
 
-    console.log(
-      `[Job Queue] Retry delay: ${delay} ms`
-    );
+    logger.info("[Job Queue] Retry delay: [redacted] ms");
 
-    console.log(
-      `[Job Queue] Next retry: ${job.nextRetryAt.toISOString()}`
-    );
+    logger.info("[Job Queue] Next retry: [redacted]");
 
     return job;
 
@@ -538,9 +517,7 @@ class JobQueue {
 
       promoted++;
 
-      console.log(
-        `[Job Queue] Retry job ready: ${jobId}`
-      );
+      logger.info("[Job Queue] Retry job ready: [redacted]");
 
     }
 
@@ -579,17 +556,11 @@ class JobQueue {
 
     this.delayedJobs.delete(jobId);
 
-    console.error(
-      `[Job Queue] Permanently failed: ${job.type} | ${job.id}`
-    );
+    logger.error("[Job Queue] Permanently failed: [redacted] | [redacted]");
 
-    console.error(
-      `[Job Queue] Total attempts: ${job.attempts}`
-    );
+    logger.error("[Job Queue] Total attempts: [redacted]");
 
-    console.error(
-      `[Job Queue] Total retries: ${job.retryCount}`
-    );
+    logger.error("[Job Queue] Total retries: [redacted]");
 
     this.pruneFinishedJobs();
 
@@ -757,7 +728,9 @@ class JobQueue {
 // SHARED QUEUE INSTANCE
 // ==========================================
 
-const jobQueue = new JobQueue();
+const jobQueue = process.env.JOB_QUEUE_MODE === "mongo"
+  ? new (require("./mongoJobQueue").MongoJobQueue)()
+  : new JobQueue();
 
 // ==========================================
 // EXPORTS
