@@ -8,52 +8,85 @@ const reportService = require(
 // POST /api/reports/generate
 // ==========================================
 
-function generateReport(req, res) {
+async function generateReport(req, res) {
+
   try {
+
     const currentUser = {
-      id: req.user.id,
-      role: req.user.role,
+
+      id: req.user?.id,
+
+      role: req.user?.role
+
     };
 
-    // Submit the job without waiting
-    // for report generation to complete.
-    const job = reportService.generateReport(
+    // Wait only for metadata creation
+    // and background job submission.
+
+    const job = await reportService.generateReport(
+
       req.body,
+
       currentUser
+
     );
 
     return res
       .location(`/api/jobs/${job.id}`)
       .status(202)
       .json({
+
         success: true,
+
         message:
           "Report generation job queued successfully",
+
         job,
+
+        exportId: job.exportId,
+
         statusUrl: `/api/jobs/${job.id}`,
+
+        exportUrl: `/api/exports/${job.exportId}`
+
       });
+
   } catch (error) {
+
     const statusCode = error.statusCode || 500;
 
     console.error(
+
       "[Report Controller] Error:",
+
       error.message
+
     );
 
     return res.status(statusCode).json({
+
       success: false,
+
       message:
+
         statusCode >= 500 && statusCode !== 503
+
           ? "Internal server error"
-          : error.message,
+
+          : error.message
+
     });
+
   }
+
 }
 
 // ==========================================
-// EXPORTS
+// EXPORT CONTROLLER
 // ==========================================
 
 module.exports = {
-  generateReport,
+
+  generateReport
+
 };
