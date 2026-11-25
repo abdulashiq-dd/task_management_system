@@ -1,1 +1,318 @@
-<p>jobs works!</p>
+<section class="jobs-page" aria-labelledby="jobs-title">
+  <header class="jobs-heading">
+    <div>
+      <p class="eyebrow">System activity</p>
+      <h2 id="jobs-title">Background Jobs</h2>
+      <p class="heading-copy">
+        Track reports, exports, notifications, and other work running behind the scenes.
+      </p>
+    </div>
+    <button class="secondary-button" type="button" [disabled]="loading()" (click)="refresh()">
+      <i [class]="loading() ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" aria-hidden="true"></i>
+      Refresh
+    </button>
+  </header>
+
+  @if (statsError()) {
+    <div class="feedback error-feedback" role="alert">
+      <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
+      <span>{{ statsError() }}</span>
+    </div>
+  }
+
+  <section class="queue-overview" aria-label="Queue status">
+    <article class="stat-card">
+      <span class="stat-icon pending-icon"><i class="pi pi-clock" aria-hidden="true"></i></span>
+      <div>
+        <strong>{{ stats()?.queue?.pending ?? '—' }}</strong><span>Pending</span>
+      </div>
+    </article>
+    <article class="stat-card">
+      <span class="stat-icon processing-icon"
+        ><i class="pi pi-spin pi-spinner" aria-hidden="true"></i
+      ></span>
+      <div>
+        <strong>{{ stats()?.queue?.processing ?? '—' }}</strong><span>Processing</span>
+      </div>
+    </article>
+    <article class="stat-card">
+      <span class="stat-icon retrying-icon"><i class="pi pi-refresh" aria-hidden="true"></i></span>
+      <div>
+        <strong>{{ stats()?.queue?.retrying ?? '—' }}</strong><span>Retrying</span>
+      </div>
+    </article>
+    <article class="stat-card">
+      <span class="stat-icon completed-icon"
+        ><i class="pi pi-check-circle" aria-hidden="true"></i
+      ></span>
+      <div>
+        <strong>{{ stats()?.queue?.completed ?? '—' }}</strong><span>Completed</span>
+      </div>
+    </article>
+    <article class="stat-card">
+      <span class="stat-icon failed-icon"
+        ><i class="pi pi-times-circle" aria-hidden="true"></i
+      ></span>
+      <div>
+        <strong>{{ stats()?.queue?.failed ?? '—' }}</strong><span>Failed</span>
+      </div>
+    </article>
+  </section>
+
+  @if (stats(); as queueStats) {
+    <section class="retry-panel" aria-label="Retry performance">
+      <div class="retry-heading">
+        <span class="retry-panel-icon"><i class="pi pi-replay" aria-hidden="true"></i></span>
+        <div>
+          <h3>Automatic retries</h3>
+          <p>Temporary failures are retried automatically with a backoff delay.</p>
+        </div>
+      </div>
+      <dl class="retry-metrics">
+        <div>
+          <dt>Retries scheduled</dt>
+          <dd>{{ queueStats.retries.totalRetriesScheduled }}</dd>
+        </div>
+        <div>
+          <dt>Recovered jobs</dt>
+          <dd>{{ queueStats.retries.recoveredJobs }}</dd>
+        </div>
+        <div>
+          <dt>Failed attempts</dt>
+          <dd>{{ queueStats.retries.failedAttempts }}</dd>
+        </div>
+        <div>
+          <dt>Permanent failures</dt>
+          <dd>{{ queueStats.retries.permanentlyFailedJobs }}</dd>
+        </div>
+      </dl>
+    </section>
+  } @else if (statsLoading()) {
+    <div class="stats-loading" role="status">
+      <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+      Loading queue statistics...
+    </div>
+  }
+
+  @if (listError()) {
+    <div class="feedback error-feedback" role="alert">
+      <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
+      <span>{{ listError() }}</span>
+      <button class="text-button" type="button" (click)="loadJobs()">Try again</button>
+    </div>
+  }
+
+  <section class="jobs-panel" aria-labelledby="jobs-list-title">
+    <div class="jobs-toolbar">
+      <div>
+        <p class="eyebrow">Job activity</p>
+        <h3 id="jobs-list-title">Recent jobs</h3>
+        <p class="list-summary">
+          @if (totalJobs() === 1) {
+            1 job
+          } @else {
+            {{ totalJobs() }} jobs
+          }
+          in your accessible queue
+        </p>
+      </div>
+      <div class="filters">
+        <label>
+          <select
+            [value]="statusFilter()"
+            (change)="onStatusChange($event)"
+            aria-label="Filter jobs by status"
+          >
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="retrying">Retrying</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+          </select>
+        </label>
+        <label>
+          <select
+            [value]="typeFilter()"
+            (change)="onTypeChange($event)"
+            aria-label="Filter jobs by type"
+          >
+            <option value="">All job types</option>
+            <option value="notification">Notifications</option>
+            <option value="activityLog">Activity logs</option>
+            <option value="reportGeneration">Report generation</option>
+            <option value="csvExport">CSV exports</option>
+            <option value="jsonExport">JSON exports</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    @if (loading() && jobs().length === 0) {
+      <div class="state-card" role="status">
+        <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+        Loading background jobs...
+      </div>
+    } @else if (jobs().length === 0) {
+      <div class="state-card empty-state">
+        <span class="state-icon"><i class="pi pi-inbox" aria-hidden="true"></i></span>
+        @if (statusFilter() || typeFilter()) {
+          <h4>No matching jobs</h4>
+          <p>Choose another status or job type to see more results.</p>
+        } @else {
+          <h4>No background jobs yet</h4>
+          <p>Queued reports, exports, and notifications will appear here.</p>
+        }
+      </div>
+    } @else {
+      <ol class="job-list" aria-label="Background jobs">
+        @for (job of jobs(); track job.id) {
+          <li class="job-item">
+            <article class="job-row">
+              <span class="job-icon" [class]="'job-icon ' + jobIconClass(job.type)">
+                <i [class]="jobIcon(job.type)" aria-hidden="true"></i>
+              </span>
+              <div class="job-info">
+                <div class="job-title-row">
+                  <h4>{{ typeLabel(job.type) }}</h4>
+                  <span
+                    class="status-badge"
+                    [class.status-pending]="job.status === 'pending'"
+                    [class.status-processing]="job.status === 'processing'"
+                    [class.status-retrying]="job.status === 'retrying'"
+                    [class.status-completed]="job.status === 'completed'"
+                    [class.status-failed]="job.status === 'failed'"
+                  >
+                    {{ statusLabel(job.status) }}
+                  </span>
+                </div>
+                <div class="job-meta">
+                  <span class="job-id">ID {{ job.id }}</span>
+                  <span>{{ attemptLabel(job) }}</span>
+                  <time [attr.datetime]="job.createdAt">
+                    Created {{ job.createdAt | date: 'MMM d, y · h:mm a' }}
+                  </time>
+                  @if (job.nextRetryAt) {
+                    <time class="retry-time" [attr.datetime]="job.nextRetryAt">
+                      Next retry {{ job.nextRetryAt | date: 'h:mm:ss a' }}
+                    </time>
+                  }
+                </div>
+              </div>
+              <button
+                class="details-button"
+                type="button"
+                [attr.aria-expanded]="expandedJobId() === job.id"
+                [attr.aria-controls]="'job-details-' + job.id"
+                (click)="toggleDetails(job.id)"
+              >
+                {{ expandedJobId() === job.id ? 'Hide details' : 'Details' }}
+                <i
+                  [class]="expandedJobId() === job.id ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+                  aria-hidden="true"
+                ></i>
+              </button>
+            </article>
+
+            @if (expandedJobId() === job.id) {
+              <section
+                class="job-detail-panel"
+                [id]="'job-details-' + job.id"
+                aria-label="Job details"
+              >
+                @if (detailLoading()) {
+                  <p class="detail-state" role="status">
+                    <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+                    Loading job details...
+                  </p>
+                } @else if (detailError()) {
+                  <p class="detail-error" role="alert">{{ detailError() }}</p>
+                } @else if (jobDetails(); as details) {
+                  <dl class="detail-grid">
+                    <div>
+                      <dt>Job ID</dt>
+                      <dd class="detail-id">{{ details.id }}</dd>
+                    </div>
+                    <div>
+                      <dt>Attempts</dt>
+                      <dd>{{ attemptLabel(details) }}</dd>
+                    </div>
+                    @if (details.startedAt) {
+                      <div>
+                        <dt>Started</dt>
+                        <dd>{{ details.startedAt | date: 'MMM d, y · h:mm a' }}</dd>
+                      </div>
+                    }
+                    @if (details.completedAt) {
+                      <div>
+                        <dt>Finished</dt>
+                        <dd>{{ details.completedAt | date: 'MMM d, y · h:mm a' }}</dd>
+                      </div>
+                    }
+                  </dl>
+
+                  @if (details.lastError) {
+                    <div class="detail-message">
+                      <strong>Last attempt</strong>
+                      <p>{{ details.lastError }}</p>
+                    </div>
+                  }
+                  @if (details.error) {
+                    <div class="detail-message failed-message">
+                      <strong>Job failed</strong>
+                      <p>{{ details.error }}</p>
+                    </div>
+                  }
+                  @if (details.errorHistory?.length) {
+                    <div class="attempt-history">
+                      <h5>Attempt history</h5>
+                      @for (attempt of details.errorHistory; track attempt.attempt) {
+                        <p>
+                          Attempt {{ attempt.attempt }} ·
+                          {{ attempt.timestamp | date: 'MMM d, y · h:mm a' }} ·
+                          {{ attempt.message }}
+                        </p>
+                      }
+                    </div>
+                  }
+                  @if (details.result !== undefined && details.result !== null) {
+                    <div class="job-result">
+                      <h5>Result</h5>
+                      <pre>{{ details.result | json }}</pre>
+                    </div>
+                  }
+                }
+              </section>
+            }
+          </li>
+        }
+      </ol>
+
+      @if (totalPages() > 1) {
+        <nav class="pagination" aria-label="Background job pages">
+          <span>Page {{ currentPage() }} of {{ totalPages() }}</span>
+          <div class="pagination-actions">
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() <= 1 || loading()"
+              (click)="loadJobs(currentPage() - 1)"
+            >
+              <i class="pi pi-arrow-left" aria-hidden="true"></i>
+              Previous
+            </button>
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() >= totalPages() || loading()"
+              (click)="loadJobs(currentPage() + 1)"
+            >
+              Next
+              <i class="pi pi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </nav>
+      }
+    }
+  </section>
+</section>

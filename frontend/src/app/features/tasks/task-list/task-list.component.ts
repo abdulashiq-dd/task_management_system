@@ -15,6 +15,7 @@ import {
 } from 'rxjs';
 
 import { Task, TaskListQuery, TaskPriority, TaskStatus } from '../../../core/models/task.model';
+import { AuthService } from '../../../core/services/auth.service';
 import { TaskService } from '../../../core/services/task.service';
 import { getHttpErrorMessage } from '../../../shared/utils/http-error.utils';
 
@@ -27,6 +28,7 @@ import { getHttpErrorMessage } from '../../../shared/utils/http-error.utils';
 export class TaskListComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly document = inject(DOCUMENT);
+  private readonly authService = inject(AuthService);
   private readonly taskService = inject(TaskService);
   private readonly loadRequests = new Subject<TaskListQuery>();
   private readonly searchChanges = new Subject<string>();
@@ -144,6 +146,17 @@ export class TaskListComponent {
       in_progress: 'In progress',
       completed: 'Completed',
     }[status];
+  }
+
+  canManageTask(task: Task): boolean {
+    const user = this.authService.currentUser();
+    return Boolean(user && (user.role === 'admin' || task.createdBy === user.id));
+  }
+
+  taskAccessLabel(task: Task): string {
+    return task.assignedTo === this.authService.currentUser()?.id
+      ? 'Assigned to you · view only'
+      : 'View only';
   }
 
   formatDueDate(dueDate: string | null): string {

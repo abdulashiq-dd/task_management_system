@@ -1,7 +1,7 @@
 import { Pagination } from './pagination.model';
 import { BackgroundJob } from './job.model';
 
-export type ExportType = 'json' | 'csv' | 'report';
+export type ExportType = 'json' | 'csv' | 'reports';
 export type ExportStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
 export interface TaskExport {

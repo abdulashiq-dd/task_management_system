@@ -307,6 +307,16 @@
   gap: 6px;
 }
 
+.task-access-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 .action-button,
 .secondary-button {
   display: inline-flex;

@@ -1,1 +1,329 @@
-<p>reports works!</p>
+<section class="reports-page" aria-labelledby="reports-title">
+  <header class="reports-heading">
+    <div>
+      <p class="eyebrow">Workspace insights</p>
+      <h2 id="reports-title">Reports &amp; Exports</h2>
+      <p class="heading-copy">
+        Create a task summary or export task data for analysis and record keeping.
+      </p>
+    </div>
+    <div class="privacy-note">
+      <i class="pi pi-lock" aria-hidden="true"></i>
+      <span>Files are only available to authorized workspace members.</span>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="feedback error-feedback" role="alert">
+      <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
+      <span>{{ errorMessage() }}</span>
+      <button type="button" aria-label="Dismiss error" (click)="errorMessage.set('')">
+        <i class="pi pi-times" aria-hidden="true"></i>
+      </button>
+    </div>
+  }
+
+  @if (actionMessage()) {
+    <div class="feedback success-feedback" role="status">
+      <i class="pi pi-check-circle" aria-hidden="true"></i>
+      <span>{{ actionMessage() }}</span>
+      <button type="button" aria-label="Dismiss message" (click)="actionMessage.set('')">
+        <i class="pi pi-times" aria-hidden="true"></i>
+      </button>
+    </div>
+  }
+
+  <div class="creation-grid">
+    <article class="creation-card report-card">
+      <div class="creation-card-top">
+        <span class="feature-icon report-icon"
+          ><i class="pi pi-chart-bar" aria-hidden="true"></i
+        ></span>
+        <span class="format-label">JSON report</span>
+      </div>
+      <h3>Task summary report</h3>
+      <p>
+        A downloadable snapshot of total, completed, pending, and overdue tasks, including the
+        completion rate and priority breakdown.
+      </p>
+      <ul class="feature-list">
+        <li><i class="pi pi-check" aria-hidden="true"></i> Workspace-scoped task metrics</li>
+        <li><i class="pi pi-check" aria-hidden="true"></i> Downloadable as a JSON file</li>
+      </ul>
+      <button
+        class="primary-button"
+        type="button"
+        [disabled]="exporting() !== null"
+        (click)="generateReport()"
+      >
+        @if (exporting() === 'reports') {
+          <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+          Preparing report...
+        } @else {
+          <i class="pi pi-file" aria-hidden="true"></i>
+          Generate summary
+        }
+      </button>
+    </article>
+
+    <article class="creation-card export-card">
+      <div class="creation-card-top">
+        <span class="feature-icon export-icon"
+          ><i class="pi pi-download" aria-hidden="true"></i
+        ></span>
+        <span class="format-label">Filtered data</span>
+      </div>
+      <h3>Export task data</h3>
+      <p>
+        Choose optional filters, then create a CSV or JSON file from tasks you are allowed to view.
+      </p>
+
+      <div class="filter-grid">
+        <label class="field search-field">
+          <span>Search tasks</span>
+          <input
+            type="search"
+            maxlength="200"
+            placeholder="Search title or description"
+            [value]="filters().search"
+            (input)="setTextFilter('search', $event)"
+          />
+        </label>
+        <label class="field">
+          <span>Status</span>
+          <select [value]="filters().status" (change)="setSelectFilter('status', $event)">
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In progress</option>
+            <option value="completed">Completed</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Priority</span>
+          <select [value]="filters().priority" (change)="setSelectFilter('priority', $event)">
+            <option value="">All priorities</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Tag</span>
+          <input
+            type="text"
+            maxlength="100"
+            placeholder="Match a task tag"
+            [value]="filters().tag"
+            (input)="setTextFilter('tag', $event)"
+          />
+        </label>
+        <label class="field">
+          <span>Due from</span>
+          <input
+            type="date"
+            [value]="filters().fromDate"
+            (change)="setDateFilter('fromDate', $event)"
+          />
+        </label>
+        <label class="field">
+          <span>Due through</span>
+          <input
+            type="date"
+            [value]="filters().toDate"
+            (change)="setDateFilter('toDate', $event)"
+          />
+        </label>
+      </div>
+
+      @if (dateRangeInvalid) {
+        <p class="field-error" role="alert">
+          The “Due from” date must be on or before “Due through”.
+        </p>
+      }
+
+      <div class="export-actions">
+        <button
+          class="primary-button"
+          type="button"
+          [disabled]="exporting() !== null || dateRangeInvalid"
+          (click)="queueExport('csv')"
+        >
+          @if (exporting() === 'csv') {
+            <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+            Queuing CSV...
+          } @else {
+            <i class="pi pi-file-excel" aria-hidden="true"></i>
+            Export CSV
+          }
+        </button>
+        <button
+          class="secondary-button"
+          type="button"
+          [disabled]="exporting() !== null || dateRangeInvalid"
+          (click)="queueExport('json')"
+        >
+          @if (exporting() === 'json') {
+            <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+            Queuing JSON...
+          } @else {
+            <i class="pi pi-code" aria-hidden="true"></i>
+            Export JSON
+          }
+        </button>
+        <button class="text-button" type="button" (click)="clearFilters()">Clear filters</button>
+      </div>
+    </article>
+  </div>
+
+  <section class="history-panel" aria-labelledby="history-title">
+    <div class="history-heading">
+      <div>
+        <p class="eyebrow">Your files</p>
+        <h3 id="history-title">Export history</h3>
+        <p class="history-copy">
+          @if (totalExports() === 1) {
+            1 file created
+          } @else {
+            {{ totalExports() }} files created
+          }
+        </p>
+      </div>
+      <div class="history-tools">
+        <label class="history-filter">
+          <select
+            [value]="historyType()"
+            (change)="onHistoryTypeChange($event)"
+            aria-label="Filter export history by format"
+          >
+            <option value="">All file types</option>
+            <option value="reports">Task summary</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+        </label>
+        <button
+          class="secondary-button refresh-button"
+          type="button"
+          [disabled]="loading()"
+          (click)="loadExports()"
+        >
+          <i [class]="loading() ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" aria-hidden="true"></i>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    @if (loading() && exports().length === 0) {
+      <div class="state-card" role="status">
+        <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+        Loading export history...
+      </div>
+    } @else if (exports().length === 0) {
+      <div class="state-card empty-state">
+        <span class="state-icon"><i class="pi pi-folder-open" aria-hidden="true"></i></span>
+        <h4>No exports yet</h4>
+        <p>Generated reports and task data files will appear here.</p>
+      </div>
+    } @else {
+      <ul class="export-list">
+        @for (record of exports(); track record.id) {
+          <li class="export-row">
+            <span class="file-icon" [class.report-file-icon]="record.type === 'reports'">
+              <i
+                [class]="
+                  record.type === 'csv'
+                    ? 'pi pi-file-excel'
+                    : record.type === 'json'
+                      ? 'pi pi-code'
+                      : 'pi pi-chart-bar'
+                "
+                aria-hidden="true"
+              ></i>
+            </span>
+            <div class="file-details">
+              <strong>{{ record.fileName }}</strong>
+              <span>
+                {{ exportTypeLabel(record.type) }}
+                @if (record.status === 'completed') {
+                  · {{ record.totalRecords }}
+                  {{ record.totalRecords === 1 ? 'record' : 'records' }} ·
+                  {{ formatBytes(record.size) }}
+                } @else {
+                  · Created {{ record.createdAt | date: 'MMM d, y · h:mm a' }}
+                }
+              </span>
+              @if (record.error && record.status === 'failed') {
+                <small class="export-error">{{ record.error }}</small>
+              }
+            </div>
+            <span
+              class="status-badge"
+              [class.status-pending]="record.status === 'pending'"
+              [class.status-processing]="
+                record.status === 'processing' || record.status === 'retrying'
+              "
+              [class.status-completed]="record.status === 'completed'"
+              [class.status-failed]="record.status === 'failed'"
+            >
+              @if (
+                record.status === 'pending' ||
+                record.status === 'processing' ||
+                record.status === 'retrying'
+              ) {
+                <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+              } @else {
+                <i
+                  [class]="
+                    record.status === 'completed' ? 'pi pi-check-circle' : 'pi pi-times-circle'
+                  "
+                  aria-hidden="true"
+                ></i>
+              }
+              {{ statusLabel(record.status) }}
+            </span>
+            <button
+              class="download-button"
+              type="button"
+              [disabled]="!record.isDownloadable || downloadingId() !== ''"
+              [attr.aria-label]="'Download ' + record.fileName"
+              (click)="downloadExport(record)"
+            >
+              @if (downloadingId() === record.id) {
+                <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+              } @else {
+                <i class="pi pi-download" aria-hidden="true"></i>
+              }
+              Download
+            </button>
+          </li>
+        }
+      </ul>
+
+      @if (totalPages() > 1) {
+        <nav class="pagination" aria-label="Export history pages">
+          <span>Page {{ currentPage() }} of {{ totalPages() }}</span>
+          <div class="pagination-actions">
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() <= 1 || loading()"
+              (click)="loadExports(currentPage() - 1)"
+            >
+              <i class="pi pi-arrow-left" aria-hidden="true"></i>
+              Previous
+            </button>
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() >= totalPages() || loading()"
+              (click)="loadExports(currentPage() + 1)"
+            >
+              Next
+              <i class="pi pi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </nav>
+      }
+    }
+  </section>
+</section>

@@ -141,32 +141,39 @@
             }
           </div>
 
-          <div class="task-actions" aria-label="Task actions">
-            <a class="action-button" [routerLink]="['/tasks', task._id, 'edit']">
-              <i class="pi pi-pencil" aria-hidden="true"></i>
-              <span>Edit</span>
-            </a>
-            @if (task.status !== 'completed') {
+          @if (canManageTask(task)) {
+            <div class="task-actions" aria-label="Task actions">
+              <a class="action-button" [routerLink]="['/tasks', task._id, 'edit']">
+                <i class="pi pi-pencil" aria-hidden="true"></i>
+                <span>Edit</span>
+              </a>
+              @if (task.status !== 'completed') {
+                <button
+                  class="action-button complete-action"
+                  type="button"
+                  [disabled]="actionTaskId() === task._id"
+                  (click)="markCompleted(task)"
+                >
+                  <i class="pi pi-check" aria-hidden="true"></i>
+                  <span>Complete</span>
+                </button>
+              }
               <button
-                class="action-button complete-action"
+                class="action-button delete-action"
                 type="button"
                 [disabled]="actionTaskId() === task._id"
-                (click)="markCompleted(task)"
+                (click)="deleteTask(task)"
               >
-                <i class="pi pi-check" aria-hidden="true"></i>
-                <span>Complete</span>
+                <i class="pi pi-trash" aria-hidden="true"></i>
+                <span>Delete</span>
               </button>
-            }
-            <button
-              class="action-button delete-action"
-              type="button"
-              [disabled]="actionTaskId() === task._id"
-              (click)="deleteTask(task)"
-            >
-              <i class="pi pi-trash" aria-hidden="true"></i>
-              <span>Delete</span>
-            </button>
-          </div>
+            </div>
+          } @else {
+            <span class="task-access-label">
+              <i class="pi pi-eye" aria-hidden="true"></i>
+              {{ taskAccessLabel(task) }}
+            </span>
+          }
         </article>
       }
     </div>

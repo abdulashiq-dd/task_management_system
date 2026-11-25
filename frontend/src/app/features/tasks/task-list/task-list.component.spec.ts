@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { Task, TaskListQuery, TaskListResponse } from '../../../core/models/task.model';
+import { AuthService } from '../../../core/services/auth.service';
 import { TaskService } from '../../../core/services/task.service';
 import { TaskListComponent } from './task-list.component';
 
@@ -14,6 +15,7 @@ describe('TaskListComponent', () => {
     update: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
   };
+  let currentUser = { id: 'user-123', role: 'user' };
 
   const task: Task = {
     _id: 'task-123',
@@ -41,6 +43,7 @@ describe('TaskListComponent', () => {
   };
 
   beforeEach(async () => {
+    currentUser = { id: 'user-123', role: 'user' };
     taskService = {
       list: vi.fn((query: TaskListQuery) => of({ ...response, currentPage: query.page ?? 1 })),
       update: vi.fn(() => of(task)),
@@ -49,7 +52,17 @@ describe('TaskListComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [TaskListComponent],
-      providers: [provideRouter([]), { provide: TaskService, useValue: taskService }],
+      providers: [
+        provideRouter([]),
+        { provide: TaskService, useValue: taskService },
+        {
+          provide: AuthService,
+          useValue: {
+            currentUser: () => currentUser,
+            isAdmin: () => currentUser.role === 'admin',
+          },
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TaskListComponent);
@@ -93,5 +106,22 @@ describe('TaskListComponent', () => {
 
     expect(taskService.update).toHaveBeenCalledWith(task._id, { status: 'completed' });
     expect(taskService.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('hides task mutation controls from an assignee who did not create the task', () => {
+    const assignedTask = { ...task, createdBy: 'user-456', assignedTo: 'user-123' };
+    component.tasks.set([assignedTask]);
+    fixture.detectChanges();
+
+    expect(component.canManageTask(assignedTask)).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('Assigned to you · view only');
+    expect(fixture.nativeElement.querySelector('.task-actions')).toBeNull();
+  });
+
+  it('allows admins to manage tasks created by other users', () => {
+    const otherUsersTask = { ...task, createdBy: 'user-456' };
+    currentUser = { id: 'admin-123', role: 'admin' };
+
+    expect(component.canManageTask(otherUsersTask)).toBe(true);
   });
 });
