@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const taskService = require("../src/services/taskService");
 const notificationService = require("../src/services/notificationService");
+const { ActivityService } = require("../src/services/activityService");
 const { TaskService } = taskService;
 const { NotificationService } = notificationService;
 const { QueueWorker, JobWorker } = require("../src/workers/jobWorker");
@@ -80,6 +81,67 @@ test("M11: injected Notification model and idempotent write preserve ownership a
   await assert.rejects(service.markNotificationAsRead(TASK, ID), NotFoundError);
   assert.deepEqual(model.findOneAndUpdate.mock.calls[0].arguments[0], { _id: TASK, user: ID });
   await assert.rejects(callback({ ...payload, task: "bad" }), ValidationError);
+});
+
+test("M11: notification listing supports a validated read-status filter", async t => {
+  const find = t.mock.fn(() => ({
+    select() { return this; },
+    sort() { return this; },
+    skip() { return this; },
+    limit() { return this; },
+    lean: async () => [],
+  }));
+  const countDocuments = t.mock.fn(async () => 0);
+  const service = new NotificationService({
+    notificationModel: { find, countDocuments },
+  });
+
+  await service.getUserNotifications(ID, { isRead: "false" });
+  assert.deepEqual(find.mock.calls[0].arguments[0], { user: ID, isRead: false });
+  assert.deepEqual(countDocuments.mock.calls[0].arguments[0], { user: ID, isRead: false });
+  await assert.rejects(
+    service.getUserNotifications(ID, { isRead: "yes" }),
+    ValidationError,
+  );
+});
+
+test("M11: activity listing paginates visible task history and validates event filters", async t => {
+  const aggregate = t.mock.fn(async () => [
+    { activities: [{ taskTitle: "Visible task" }], total: [{ count: 6 }] },
+  ]);
+  const service = new ActivityService({
+    activityModel: { aggregate },
+    taskModel: { collection: { name: "tasks" } },
+  });
+
+  const result = await service.getActivity(current, {
+    page: "2",
+    limit: "3",
+    eventType: "taskUpdated",
+  });
+  assert.deepEqual(result, {
+    activities: [{ taskTitle: "Visible task" }],
+    pagination: {
+      page: 2,
+      limit: 3,
+      total: 6,
+      totalPages: 2,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    },
+  });
+
+  const pipeline = aggregate.mock.calls[0].arguments[0];
+  assert.deepEqual(pipeline[0], { $match: { eventType: "taskUpdated" } });
+  const lookup = pipeline.find(stage => stage.$lookup)?.$lookup;
+  assert.equal(lookup.from, "tasks");
+  const visibility = lookup.pipeline[0].$match.$or;
+  assert.equal(String(visibility[0].createdBy), ID);
+  assert.equal(String(visibility[1].assignedTo), ID);
+  await assert.rejects(
+    service.getActivity(current, { eventType: "notAnEvent" }),
+    ValidationError,
+  );
 });
 
 test("M11: separate service instances do not share injected dependencies", async () => {

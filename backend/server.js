@@ -56,7 +56,11 @@ async function startServer() {
 
     try { validateEnvironment(); } catch (error) { logger.error(error.message); throw error; }
     await connectDB();
-    await acquireRuntimeLease();
+    if (process.env.NODE_ENV === "production") {
+      await acquireRuntimeLease();
+    } else {
+      logger.info("Runtime lease disabled outside production");
+    }
 
     // 2. Initialize database models.
 

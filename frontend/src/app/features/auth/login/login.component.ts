@@ -21,7 +21,7 @@ export class LoginComponent {
 
   readonly loginForm = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required]]
+    password: ['', [Validators.required]],
   });
 
   submit(): void {
@@ -36,14 +36,16 @@ export class LoginComponent {
     this.authService.login(this.loginForm.getRawValue()).subscribe({
       next: () => {
         this.submitting.set(false);
-        void this.router.navigate([
-          this.authService.isAdmin() ? '/admin/dashboard' : '/dashboard'
-        ]);
+        void this.router.navigate([this.authService.isAdmin() ? '/admin/dashboard' : '/dashboard']);
       },
       error: (error: HttpErrorResponse) => {
         this.submitting.set(false);
-        this.errorMessage.set(error.error?.message || 'Unable to sign in. Please try again.');
-      }
+        this.errorMessage.set(
+          error.status === 0
+            ? 'Cannot connect to the server. Check that the backend is running, then try again.'
+            : error.error?.message || 'Unable to sign in. Please try again.',
+        );
+      },
     });
   }
 }

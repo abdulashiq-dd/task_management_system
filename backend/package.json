@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
+    "dev": "nodemon scripts/dev-server.js",
     "test": "node test/run.js",
     "test:unit": "node test/run.js --unit",
     "test:integration": "node test/run.js --integration",

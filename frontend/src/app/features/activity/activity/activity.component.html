@@ -1,1 +1,108 @@
-<p>activity works!</p>
+<section class="activity-page" aria-labelledby="activity-title">
+  <header class="activity-heading">
+    <div>
+      <p class="eyebrow">Workspace history</p>
+      <h2 id="activity-title">Activity</h2>
+      <p class="heading-copy">Follow task updates and see what’s moving across your workspace.</p>
+    </div>
+    @if (!loading() && !errorMessage()) {
+      <div class="activity-total">
+        <strong>{{ totalActivities() }}</strong>
+        <span>{{ totalActivities() === 1 ? 'event' : 'events' }} recorded</span>
+      </div>
+    }
+  </header>
+
+  <section class="activity-panel" aria-label="Task activity">
+    <div class="activity-toolbar">
+      <label for="activity-filter">Filter activity</label>
+      <select id="activity-filter" [value]="eventFilter()" (change)="onEventTypeChange($event)">
+        <option value="">All activity</option>
+        @for (eventType of eventTypes; track eventType) {
+          <option [value]="eventType">{{ eventLabel(eventType) }}</option>
+        }
+      </select>
+    </div>
+
+    @if (loading()) {
+      <div class="state-card" role="status">
+        <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+        Loading activity...
+      </div>
+    } @else if (errorMessage()) {
+      <div class="state-card error-state" role="alert">
+        <span class="state-icon"><i class="pi pi-exclamation-circle" aria-hidden="true"></i></span>
+        <h3>We couldn’t load activity</h3>
+        <p>{{ errorMessage() }}</p>
+        <button class="secondary-button" type="button" (click)="loadActivity()">Try again</button>
+      </div>
+    } @else if (activities().length === 0) {
+      <div class="state-card empty-state">
+        <span class="state-icon"><i class="pi pi-history" aria-hidden="true"></i></span>
+        @if (eventFilter()) {
+          <h3>No matching activity</h3>
+          <p>Try a different activity type filter.</p>
+          <button class="secondary-button" type="button" (click)="loadActivity(1, '')">
+            Clear filter
+          </button>
+        } @else {
+          <h3>No activity yet</h3>
+          <p>Task creation, assignments, and updates will appear here.</p>
+        }
+      </div>
+    } @else {
+      <ol class="activity-list" aria-label="Recent task activity">
+        @for (activity of activities(); track activity._id) {
+          <li class="activity-entry">
+            <span class="timeline-icon">
+              <i [class]="eventIcon(activity.eventType)" aria-hidden="true"></i>
+            </span>
+            <article class="activity-card">
+              <div class="activity-card-header">
+                <span class="event-label">{{ eventLabel(activity.eventType) }}</span>
+                <time [attr.datetime]="activity.createdAt">
+                  {{ activity.createdAt | date: 'MMM d, y · h:mm a' }}
+                </time>
+              </div>
+              <p class="activity-summary">
+                <strong>{{ actorLabel(activity) }}</strong>
+                {{ activityDescription(activity) }}
+              </p>
+              <a class="task-link" [routerLink]="['/tasks', activity.task]">
+                <i class="pi pi-check-square" aria-hidden="true"></i>
+                {{ activity.taskTitle || 'Open task' }}
+                <i class="pi pi-arrow-up-right" aria-hidden="true"></i>
+              </a>
+            </article>
+          </li>
+        }
+      </ol>
+
+      @if (totalPages() > 1) {
+        <nav class="pagination" aria-label="Activity pages">
+          <span>Page {{ currentPage() }} of {{ totalPages() }}</span>
+          <div class="pagination-actions">
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() <= 1 || loading()"
+              (click)="loadActivity(currentPage() - 1)"
+            >
+              <i class="pi pi-arrow-left" aria-hidden="true"></i>
+              Previous
+            </button>
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() >= totalPages() || loading()"
+              (click)="loadActivity(currentPage() + 1)"
+            >
+              Next
+              <i class="pi pi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </nav>
+      }
+    }
+  </section>
+</section>

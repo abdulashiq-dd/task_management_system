@@ -4,6 +4,7 @@ const express = require("express");
 const taskRoutes = require("./routes/taskRoutes");
 const authRoutes = require("./routes/authRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const activityRoutes = require("./routes/activityRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const jobRoutes = require("./routes/jobRoutes");
 const exportRoutes = require("./routes/exportRoutes");
@@ -17,6 +18,7 @@ const app = express();
 
 app.use(express.json());
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/activity", activityRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/exports", exportRoutes);
 app.use("/api/reports", reportRoutes);

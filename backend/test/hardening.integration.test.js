@@ -109,6 +109,8 @@ async function main(){
   });
   await check('C4/C5: paginated notifications and jobs; private keys not exposed',async()=>{
     const n=await request('GET','/api/notifications?page=1&limit=1',assignee);assert.equal(n.status,200);assert.equal(n.data.notifications.length,1);assert.equal(n.data.pagination.limit,1);assert.ok(!Object.hasOwn(n.data.notifications[0],'backgroundJobId'));assert.ok(!Object.hasOwn(n.data.notifications[0],'deduplicationKey'));
+    const a=await request('GET','/api/activity?page=1&limit=1',assignee);assert.equal(a.status,200);assert.equal(a.data.activities.length,1);assert.equal(a.data.pagination.limit,1);assert.equal(a.data.activities[0].taskTitle,'Hardening task');assert.ok(!Object.hasOwn(a.data.activities[0],'backgroundJobId'));
+    const hidden=await request('GET','/api/activity',other);assert.equal(hidden.status,200);assert.equal(hidden.data.activities.length,0);
     const j=await request('GET','/api/jobs?page=1&limit=1',admin);assert.equal(j.status,200);assert.equal(j.data.jobs.length,1);assert.ok(j.data.pagination.total>1);
   });
   await check('A4: queued admin export runs with demoted role and correct task scope',async()=>{
