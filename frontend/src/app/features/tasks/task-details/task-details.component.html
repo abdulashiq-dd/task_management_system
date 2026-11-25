@@ -1,1 +1,134 @@
-<p>task-details works!</p>
+@if (loading()) {
+  <div class="state-card" role="status">
+    <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+    Loading task...
+  </div>
+} @else if (errorMessage()) {
+  <section class="state-card error-state" role="alert" aria-labelledby="task-error-title">
+    <span class="state-icon"><i class="pi pi-exclamation-circle" aria-hidden="true"></i></span>
+    <h2 id="task-error-title">We couldn’t open this task</h2>
+    <p>{{ errorMessage() }}</p>
+    <div class="state-actions">
+      <button class="secondary-button" type="button" (click)="retry()">Try again</button>
+      <a class="secondary-button" routerLink="/tasks">Back to tasks</a>
+    </div>
+  </section>
+} @else if (task(); as task) {
+  <section class="task-details-page" aria-labelledby="task-title">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a routerLink="/tasks">Tasks</a>
+      <i class="pi pi-chevron-right" aria-hidden="true"></i>
+      <span>Task details</span>
+    </nav>
+
+    <header class="task-heading">
+      <div class="task-heading-copy">
+        <p class="eyebrow">Task details</p>
+        <h2 id="task-title">{{ task.title }}</h2>
+        <div class="task-badges">
+          <span
+            class="status-badge"
+            [class.status-pending]="task.status === 'pending'"
+            [class.status-in_progress]="task.status === 'in_progress'"
+            [class.status-completed]="task.status === 'completed'"
+          >
+            <i
+              [class]="task.status === 'completed' ? 'pi pi-check-circle' : 'pi pi-circle'"
+              aria-hidden="true"
+            ></i>
+            {{ statusLabel(task.status) }}
+          </span>
+          <span
+            class="priority-badge"
+            [class.priority-low]="task.priority === 'low'"
+            [class.priority-medium]="task.priority === 'medium'"
+            [class.priority-high]="task.priority === 'high'"
+          >
+            <i class="pi pi-flag-fill" aria-hidden="true"></i>
+            {{ priorityLabel(task.priority) }}
+          </span>
+          @if (task.isOverdue && task.status !== 'completed') {
+            <span class="overdue-badge">
+              <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+              Overdue
+            </span>
+          }
+        </div>
+      </div>
+      <div class="task-heading-actions">
+        @if (canEdit()) {
+          <a class="primary-button" [routerLink]="['/tasks', task._id, 'edit']">
+            <i class="pi pi-pencil" aria-hidden="true"></i>
+            Edit task
+          </a>
+        }
+        <a class="secondary-button" routerLink="/tasks">
+          <i class="pi pi-arrow-left" aria-hidden="true"></i>
+          All tasks
+        </a>
+      </div>
+    </header>
+
+    <div class="details-grid">
+      <article class="details-card description-card">
+        <div class="card-heading">
+          <span class="card-icon"><i class="pi pi-align-left" aria-hidden="true"></i></span>
+          <div>
+            <h3>Description</h3>
+            <p>Task scope and notes</p>
+          </div>
+        </div>
+        @if (task.description) {
+          <p class="task-description">{{ task.description }}</p>
+        } @else {
+          <p class="muted-copy">No description has been added.</p>
+        }
+
+        @if (task.tags.length > 0) {
+          <div class="tags-section">
+            <h4>Tags</h4>
+            <ul class="task-tags" aria-label="Task tags">
+              @for (tag of task.tags; track tag) {
+                <li><i class="pi pi-hashtag" aria-hidden="true"></i>{{ tag }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </article>
+
+      <aside class="details-card metadata-card" aria-label="Task information">
+        <div class="card-heading">
+          <span class="card-icon"><i class="pi pi-info-circle" aria-hidden="true"></i></span>
+          <div>
+            <h3>Information</h3>
+            <p>Dates and task status</p>
+          </div>
+        </div>
+        <dl class="metadata-list">
+          <div>
+            <dt><i class="pi pi-calendar" aria-hidden="true"></i> Due date</dt>
+            <dd [class.overdue-text]="task.isOverdue && task.status !== 'completed'">
+              @if (task.dueDate) {
+                {{ task.dueDate | date: 'MMM d, y' : 'UTC' }}
+              } @else {
+                No due date
+              }
+            </dd>
+          </div>
+          <div>
+            <dt><i class="pi pi-plus-circle" aria-hidden="true"></i> Created</dt>
+            <dd>{{ task.createdAt | date: 'MMM d, y, h:mm a' }}</dd>
+          </div>
+          <div>
+            <dt><i class="pi pi-refresh" aria-hidden="true"></i> Last updated</dt>
+            <dd>{{ task.updatedAt | date: 'MMM d, y, h:mm a' }}</dd>
+          </div>
+          <div>
+            <dt><i class="pi pi-hashtag" aria-hidden="true"></i> Task ID</dt>
+            <dd class="task-id">{{ task._id }}</dd>
+          </div>
+        </dl>
+      </aside>
+    </div>
+  </section>
+}
