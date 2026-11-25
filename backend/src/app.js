@@ -16,6 +16,25 @@ const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
 
+if (process.env.NODE_ENV === "production") {
+  const configuredProxy = process.env.TRUST_PROXY?.trim();
+  if (configuredProxy) {
+    app.set(
+      "trust proxy",
+      /^\d+$/.test(configuredProxy)
+        ? Number(configuredProxy)
+        : configuredProxy.split(",").map(value => value.trim()).filter(Boolean)
+    );
+  }
+
+  app.use((req, res, next) => {
+    if (!req.secure) {
+      return res.status(400).json({ message: "HTTPS is required" });
+    }
+    return next();
+  });
+}
+
 app.use(express.json());
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/activity", activityRoutes);

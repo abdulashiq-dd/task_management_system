@@ -8,10 +8,12 @@ Handled backend errors use `{ "message": "..." }`. Dashboard, jobs, exports, and
 
 | Method | Path | Auth | Request | Success |
 |---|---|---|---|---|
-| `POST` | `/api/auth/register` | Public; 10 requests/IP/15 min | `{ name, email, password }` | `201`: `{ message, user }` |
-| `POST` | `/api/auth/login` | Public; 30 requests/IP/15 min | `{ email, password }` | `200`: `{ message, token, user }` |
+| `GET` | `/api/auth/password-encryption/public-key` | Public; 60 requests/IP/15 min | None | `{ keyId, publicKeySpki }` |
+| `POST` | `/api/auth/password-encryption/challenges` | Public; 30 requests/IP/15 min | `{ operation, account, keyId }` | `201`: one-use challenge metadata |
+| `POST` | `/api/auth/register` | Public; 10 requests/IP/15 min | `{ name, email, challengeId, keyId, encryptedPassword }` | `201`: `{ message, user }` |
+| `POST` | `/api/auth/login` | Public; 30 requests/IP/15 min | `{ email, challengeId, keyId, encryptedPassword }` | `200`: `{ message, token, user }` |
 
-Registration requires name, valid email, and password with 8–72 UTF-8 bytes. Registration always creates a `user`; email uniqueness is enforced. JWTs use HS256 and expire after one hour.
+The Angular client obtains the public key and a short-lived challenge, then encrypts the password using RSA-OAEP/SHA-256. The encrypted password is bound to the operation, normalized email, challenge and key ID. Plaintext `password` request fields are rejected. Registration requires name, valid email, and a password with 8–72 UTF-8 bytes. Registration always creates a `user`; email uniqueness is enforced. JWTs use HS256 and expire after one hour. The repository currently has no change-password or reset-password API.
 
 ## Tasks
 

@@ -9,9 +9,15 @@ const { taskFields } = require("../utils/taskFields");
 const createTask = async (req, res, next) => {
   try {
     // Include the authenticated user as the creator
-    const taskData = taskFields(req.body);
+    const taskBody = req.body || {};
+    if (req.user.role !== "admin" && Object.hasOwn(taskBody, "assignedTo")) {
+      throw createError("Unsupported task field: assignedTo", 400);
+    }
 
-    const newTask = await taskService.createTask(taskData, req.user);
+    const { assignedTo, ...taskFieldsBody } = taskBody;
+    const taskData = taskFields(taskFieldsBody);
+
+    const newTask = await taskService.createTask(taskData, req.user, assignedTo);
 
     return res.status(201).json({
       message: "Task created successfully",

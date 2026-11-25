@@ -88,6 +88,77 @@
         </div>
       </div>
 
+      @if (isAdmin() && !isEditMode()) {
+        <div class="assignment-section">
+          <div class="assignment-heading">
+            <span class="section-icon" aria-hidden="true"><i class="pi pi-users"></i></span>
+            <div>
+              <h3>Assignment</h3>
+              <p>Assign this task to one person or an entire workspace group.</p>
+            </div>
+          </div>
+
+          <div class="assignment-type" role="radiogroup" aria-label="Assignment type">
+            <label>
+              <input type="radio" formControlName="assignmentType" value="person" />
+              <span><i class="pi pi-user"></i> Particular person</span>
+            </label>
+            <label>
+              <input type="radio" formControlName="assignmentType" value="group" />
+              <span><i class="pi pi-users"></i> Group</span>
+            </label>
+          </div>
+
+          @if (taskForm.controls.assignmentType.value === 'person') {
+            <div class="field assignment-field">
+              <label for="task-assignee">Person</label>
+              <select id="task-assignee" formControlName="assignee" [disabled]="usersLoading()">
+                <option value="">Unassigned</option>
+                @for (user of users(); track user._id) {
+                  <option [value]="user._id">{{ user.name }} — {{ user.role }}</option>
+                }
+              </select>
+            </div>
+          } @else {
+            <div class="candidate-heading">
+              <span class="field-label">Choose people</span>
+              <button
+                class="candidate-select-all"
+                type="button"
+                (click)="toggleAllCandidates()"
+                [disabled]="usersLoading() || users().length === 0"
+              >
+                {{ selectedUserIds().length === users().length && users().length ? 'Clear selection' : 'Select all' }}
+              </button>
+            </div>
+            @if (usersLoading()) {
+              <div class="candidate-state" role="status">Loading workspace members…</div>
+            } @else if (users().length) {
+              <div class="candidate-list" aria-label="Select task assignees">
+                @for (user of users(); track user._id) {
+                  <label class="candidate-option">
+                    <input
+                      type="checkbox"
+                      [checked]="selectedUserIds().includes(user._id)"
+                      (change)="toggleCandidate(user._id)"
+                    />
+                    <span class="candidate-copy">
+                      <strong>{{ user.name }}</strong>
+                      <small>{{ user.email }} · {{ user.role }}</small>
+                    </span>
+                  </label>
+                }
+              </div>
+              <small class="field-hint candidate-hint">
+                {{ selectedUserIds().length }} selected. Each selected person gets their own assigned task.
+              </small>
+            } @else {
+              <div class="candidate-state">No workspace members are available to assign.</div>
+            }
+          }
+        </div>
+      }
+
       <div class="form-grid">
         <div class="field">
           <label for="task-status">Status</label>

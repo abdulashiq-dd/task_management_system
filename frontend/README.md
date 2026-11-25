@@ -33,4 +33,11 @@ See [API_INTEGRATION.md](docs/API_INTEGRATION.md) for the implemented backend co
 
 This project currently uses the PrimeNG community packages and the PrimeUIX Aura theme. The source code uses the package exactly as configured in `app.config.ts` and does not suppress, bypass, or mock license verification.
 
-Before using any PrimeNG or PrimeUIX offering that requires a commercial license in production, obtain the official license and configure it using the vendor's current documentation. Keep license configuration outside source control when it contains credentials or secrets.
+Configure the licensed package with a valid Community or Commercial key before starting or building the frontend:
+
+```powershell
+$env:PRIMEUI_LICENSE = "your-license-key"
+npm start
+```
+
+For a persistent local setup, copy `.env.example` to `.env.local` and set `PRIMEUI_LICENSE`. The generated environment file and `.env.local` are ignored by Git. Do not commit license keys.

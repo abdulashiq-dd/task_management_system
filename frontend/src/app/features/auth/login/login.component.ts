@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { PasskeyService } from '../../../core/services/passkey.service';
 
 @Component({
   imports: [ReactiveFormsModule, RouterLink],
@@ -14,9 +15,11 @@ import { AuthService } from '../../../core/services/auth.service';
 export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
+  private readonly passkeyService = inject(PasskeyService);
   private readonly router = inject(Router);
 
   readonly submitting = signal(false);
+  readonly passkeySubmitting = signal(false);
   readonly errorMessage = signal('');
 
   readonly loginForm = this.fb.nonNullable.group({
@@ -47,5 +50,39 @@ export class LoginComponent {
         );
       },
     });
+  }
+
+  async submitPasskey(): Promise<void> {
+    if (this.submitting() || this.passkeySubmitting()) {
+      return;
+    }
+
+    this.passkeySubmitting.set(true);
+    this.errorMessage.set('');
+
+    try {
+      await this.passkeyService.login();
+      void this.router.navigate([
+        this.authService.isAdmin() ? '/admin/dashboard' : '/dashboard',
+      ]);
+    } catch (error) {
+      this.errorMessage.set(this.passkeyErrorMessage(error));
+    } finally {
+      this.passkeySubmitting.set(false);
+    }
+  }
+
+  private passkeyErrorMessage(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      return error.error?.message || 'Unable to sign in with a passkey. Please try again.';
+    }
+
+    if (error instanceof Error && error.name === 'NotAllowedError') {
+      return 'Passkey sign-in was cancelled or no matching passkey is available.';
+    }
+
+    return error instanceof Error
+      ? error.message
+      : 'Unable to sign in with a passkey. Please try again.';
   }
 }

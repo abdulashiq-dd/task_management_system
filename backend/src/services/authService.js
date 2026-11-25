@@ -6,6 +6,31 @@ const User = require("../models/userModel");
 // A fixed valid bcrypt hash ensures unknown accounts still incur a cost-12 comparison.
 const DUMMY_HASH = "$2b$12$w9i2Sli8ps0tLRg5KjvHROn1AykJHSQqOlRpFGYNtjqLm2ivvS.I2";
 
+const createSession = user => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
+  const token = jwt.sign(
+    { sub: user._id.toString() },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "1h",
+      algorithm: "HS256"
+    }
+  );
+
+  return {
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    }
+  };
+};
+
 const registerUser = async ({ name, email, password }) => {
   const normalizedName = name.trim();
   const normalizedEmail = email.trim().toLowerCase();
@@ -57,28 +82,7 @@ const loginUser = async ({ email, password }) => {
     throw createError("Invalid email or password", 401);
   }
 
-  if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is not configured");
-  }
-
-  const token = jwt.sign(
-    { sub: user._id.toString() },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "1h",
-      algorithm: "HS256"
-    }
-  );
-
-  return {
-    token,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role
-    }
-  };
+  return createSession(user);
 };
 
-module.exports = { registerUser,loginUser };
+module.exports = { createSession, registerUser, loginUser };

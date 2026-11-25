@@ -26,6 +26,7 @@ const {
 } = require("../../src/config/fileStorage");
 
 const { sleep } = require("../../src/utils/retry");
+const { encryptedPassword } = require("../helpers/encryptedPassword");
 
 let server;
 let baseUrl;
@@ -99,11 +100,12 @@ async function test(name, callback) {
 
 async function login(email, password, role) {
 
+  const credentials = await encryptedPassword(baseUrl, "login", email, password);
   const response = await request(
     "POST",
     "/api/auth/login",
     null,
-    { email, password }
+    credentials
   );
 
   assert.equal(response.status, 200);

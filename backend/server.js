@@ -8,6 +8,8 @@ const { validateEnvironment } = require("./src/config/env");
 const { acquireRuntimeLease, releaseRuntimeLease } = require("./src/config/runtimeLease");
 const Task = require("./src/models/taskModel");
 const User = require("./src/models/userModel");
+const PasskeyChallenge = require("./src/models/passkeyChallengeModel");
+const PasswordChallenge = require("./src/models/passwordChallengeModel");
 
 const app = require("./src/app");
 const { jobQueue } = require("./src/queues/jobQueue");
@@ -77,7 +79,9 @@ async function startServer() {
       TaskActivity.createIndexes(),
       Export.createIndexes(),
       Task.createIndexes(),
-      User.createIndexes()
+      User.createIndexes(),
+      PasskeyChallenge.createIndexes(),
+      PasswordChallenge.createIndexes()
     ]);
 
     logger.info("Notification indexes initialized");

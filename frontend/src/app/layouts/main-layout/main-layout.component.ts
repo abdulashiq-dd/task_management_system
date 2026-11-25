@@ -13,7 +13,10 @@ import { filter } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
+import { MessageService } from 'primeng/api';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
+import { PasskeyService } from '../../core/services/passkey.service';
 import { ThemeService } from '../../core/services/theme.service';
 
 interface NavigationItem {
@@ -47,9 +50,12 @@ export class MainLayoutComponent {
   private readonly router = inject(Router);
   private readonly activatedRoute = inject(ActivatedRoute);
   private readonly document = inject(DOCUMENT);
+  private readonly passkeyService = inject(PasskeyService);
+  private readonly messageService = inject(MessageService);
   readonly themeService = inject(ThemeService);
 
   readonly currentUser = this.authService.currentUser;
+  readonly passkeyBusy = signal(false);
   readonly sidebarExpanded = signal(this.restoreSidebarPreference());
   readonly mobileDrawerOpen = signal(false);
   readonly profileMenuOpen = signal(false);
@@ -74,21 +80,17 @@ export class MainLayoutComponent {
   );
   readonly menuItems = computed<NavigationItem[]>(() => {
     const items: NavigationItem[] = [
-      { label: 'Dashboard', icon: 'pi pi-home', route: this.dashboardRoute() },
+      {
+        label: this.authService.isAdmin() ? 'Admin dashboard' : 'Dashboard',
+        icon: this.authService.isAdmin() ? 'pi pi-shield' : 'pi pi-home',
+        route: this.dashboardRoute(),
+      },
       { label: 'Tasks', icon: 'pi pi-check-square', route: '/tasks' },
       { label: 'Notifications', icon: 'pi pi-bell', route: '/notifications' },
       { label: 'Activity', icon: 'pi pi-history', route: '/activity' },
       { label: 'Reports & Exports', icon: 'pi pi-chart-bar', route: '/reports' },
       { label: 'Background Jobs', icon: 'pi pi-sync', route: '/jobs' },
     ];
-
-    if (this.authService.isAdmin()) {
-      items.splice(1, 0, {
-        label: 'Admin dashboard',
-        icon: 'pi pi-shield',
-        route: '/admin/dashboard',
-      });
-    }
 
     return items;
   });
@@ -134,6 +136,37 @@ export class MainLayoutComponent {
 
   logout(): void {
     this.authService.logout();
+  }
+
+  async addPasskey(): Promise<void> {
+    if (this.passkeyBusy()) {
+      return;
+    }
+
+    this.passkeyBusy.set(true);
+    try {
+      await this.passkeyService.register();
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Passkey added',
+        detail: 'You can now sign in with this passkey.',
+      });
+    } catch (error) {
+      const detail = error instanceof HttpErrorResponse
+        ? error.error?.message || 'Unable to add a passkey. Please try again.'
+        : error instanceof Error && error.name === 'NotAllowedError'
+          ? 'Passkey setup was cancelled.'
+          : error instanceof Error
+            ? error.message
+            : 'Unable to add a passkey. Please try again.';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Passkey not added',
+        detail,
+      });
+    } finally {
+      this.passkeyBusy.set(false);
+    }
   }
 
   private isMobile(): boolean {

@@ -136,6 +136,15 @@
                 <span>{{ currentUser()?.email }}</span>
               </div>
               <span class="dropdown-role">{{ roleLabel() }}</span>
+              <button
+                type="button"
+                role="menuitem"
+                [disabled]="passkeyBusy()"
+                (click)="addPasskey(); closeProfileMenu()"
+              >
+                <i class="pi pi-key" aria-hidden="true"></i>
+                {{ passkeyBusy() ? 'Adding passkey...' : 'Add a passkey' }}
+              </button>
               <button type="button" role="menuitem" (click)="logout(); closeProfileMenu()">
                 <i class="pi pi-sign-out" aria-hidden="true"></i>
                 Sign out

@@ -3,6 +3,7 @@ import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { Task } from '../../../core/models/task.model';
 import { TaskService } from '../../../core/services/task.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { TaskFormComponent } from './task-form.component';
 
 describe('TaskFormComponent', () => {
@@ -13,6 +14,10 @@ describe('TaskFormComponent', () => {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     getById: ReturnType<typeof vi.fn>;
+  };
+  let authService: {
+    isAdmin: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
 
@@ -39,6 +44,10 @@ describe('TaskFormComponent', () => {
       update: vi.fn(() => of(task)),
       getById: vi.fn(() => of(task)),
     };
+    authService = {
+      isAdmin: vi.fn(() => false),
+      listUsers: vi.fn(() => of({ message: 'Users', users: [] })),
+    };
     router = { navigate: vi.fn().mockResolvedValue(true) };
 
     await TestBed.configureTestingModule({
@@ -54,6 +63,7 @@ describe('TaskFormComponent', () => {
         },
         { provide: Router, useValue: router },
         { provide: TaskService, useValue: taskService },
+        { provide: AuthService, useValue: authService },
       ],
     }).compileComponents();
   });
@@ -73,6 +83,8 @@ describe('TaskFormComponent', () => {
       priority: 'high',
       dueDate: '2026-12-01',
       tags: ' release, planning, release ',
+      assignmentType: 'person',
+      assignee: '',
     });
 
     component.submit();
@@ -85,6 +97,38 @@ describe('TaskFormComponent', () => {
       dueDate: '2026-12-01',
       tags: ['release', 'planning'],
     });
+    expect(router.navigate).toHaveBeenCalledWith(['/tasks']);
+  });
+
+  it('creates assigned tasks only for the people selected in a custom group', () => {
+    authService.isAdmin.mockReturnValue(true);
+    authService.listUsers.mockReturnValue(
+      of({
+        message: 'Users',
+        users: [
+          { _id: 'user-1', name: 'Taylor', email: 'taylor@example.com', role: 'user' },
+          { _id: 'user-2', name: 'Morgan', email: 'morgan@example.com', role: 'user' },
+          { _id: 'user-3', name: 'Casey', email: 'casey@example.com', role: 'admin' },
+        ],
+      }),
+    );
+    createComponent();
+    component.taskForm.controls.title.setValue('Prepare team review');
+    component.taskForm.controls.assignmentType.setValue('group');
+    component.toggleCandidate('user-1');
+    component.toggleCandidate('user-3');
+
+    component.submit();
+
+    expect(taskService.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ title: 'Prepare team review', assignedTo: 'user-1' }),
+    );
+    expect(taskService.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ title: 'Prepare team review', assignedTo: 'user-3' }),
+    );
+    expect(taskService.create).toHaveBeenCalledTimes(2);
     expect(router.navigate).toHaveBeenCalledWith(['/tasks']);
   });
 

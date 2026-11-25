@@ -23,6 +23,7 @@ const { FILE_TYPES, deleteFile } = require('../src/config/fileStorage');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { sleep } = require('../src/utils/retry');
+const { encryptedPassword } = require('./helpers/encryptedPassword');
 let server, baseUrl, passed = 0;
 function current(user) { return { id: String(user._id), role: user.role }; }
 const token = user => jwt.sign({ sub:String(user._id) }, process.env.JWT_SECRET, { algorithm:'HS256', expiresIn:'1h' });
@@ -35,7 +36,7 @@ async function check(name,fn){ await fn(); passed++; console.log(`[PASS] ${name}
 async function until(fn){ const end=Date.now()+15000;while(Date.now()<end){const result=await fn();if(result)return result;await sleep(50);}throw new Error('Timed out waiting for durable job'); }
 async function main(){
   await mongoose.connect(process.env.MONGO_URI);
-  await Promise.all([Task, User, Notification, TaskActivity, Export, BackgroundJob].map(Model=>Model.createIndexes()));
+  await Promise.all([Task, User, Notification, TaskActivity, Export, BackgroundJob, require('../src/models/passwordChallengeModel')].map(Model=>Model.createIndexes()));
   await BackgroundJob.deleteMany({}); // Disconnected, disposable database only.
   const suffix=randomUUID();
   const passwordHash=await bcrypt.hash(randomUUID(),12);
@@ -129,7 +130,10 @@ async function main(){
   });
   await check('D2/A5: register without body is 400; incorrect and nonexistent login are 401',async()=>{
     assert.equal((await request('POST','/api/auth/register',null)).status,400);
-    for(const email of [creator.email,'unknown@example.invalid']) assert.equal((await request('POST','/api/auth/login',null,{email,password:'not-correct'})).status,401);
+    for(const email of [creator.email,'unknown@example.invalid']) {
+      const credentials = await encryptedPassword(baseUrl, 'login', email, 'not-correct');
+      assert.equal((await request('POST','/api/auth/login',null,credentials)).status,401);
+    }
   });
   await check('F1: creator and admin deletion authorized',async()=>{
     const a=(await request('POST','/api/tasks',creator,{title:'Delete me'})).data.task._id;

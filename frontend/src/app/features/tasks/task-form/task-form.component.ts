@@ -2,9 +2,12 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
 
 import { TaskCreateRequest, TaskPriority, TaskStatus } from '../../../core/models/task.model';
 import { TaskService } from '../../../core/services/task.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { WorkspaceUser } from '../../../core/models/auth.model';
 import { getHttpErrorMessage } from '../../../shared/utils/http-error.utils';
 
 @Component({
@@ -17,6 +20,7 @@ export class TaskFormComponent {
   private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
   private readonly taskService = inject(TaskService);
+  private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -25,6 +29,10 @@ export class TaskFormComponent {
   readonly submitting = signal(false);
   readonly loading = signal(this.isEditMode());
   readonly errorMessage = signal('');
+  readonly users = signal<WorkspaceUser[]>([]);
+  readonly usersLoading = signal(false);
+  readonly selectedUserIds = signal<string[]>([]);
+  readonly isAdmin = this.authService.isAdmin;
 
   readonly taskForm = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(120)]],
@@ -33,9 +41,14 @@ export class TaskFormComponent {
     priority: ['medium' as TaskPriority],
     dueDate: [''],
     tags: [''],
+    assignmentType: ['person' as 'person' | 'group'],
+    assignee: [''],
   });
 
   constructor() {
+    if (this.isAdmin()) {
+      this.loadUsers();
+    }
     if (this.taskId) {
       this.loadTask(this.taskId);
     }
@@ -64,6 +77,40 @@ export class TaskFormComponent {
       ],
     };
 
+    if (!this.taskId && this.isAdmin()) {
+      if (values.assignmentType === 'person') {
+        if (values.assignee) request.assignedTo = values.assignee;
+      } else {
+        const selectedIds = new Set(this.selectedUserIds());
+        const targets = this.users().filter((user) => selectedIds.has(user._id));
+
+        if (targets.length === 0) {
+          this.errorMessage.set('Select at least one person to create this group task.');
+          return;
+        }
+
+        this.submitting.set(true);
+        this.errorMessage.set('');
+        forkJoin(
+          targets.map((user) => this.taskService.create({ ...request, assignedTo: user._id })),
+        )
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: () => {
+              this.submitting.set(false);
+              void this.router.navigate(['/tasks']);
+            },
+            error: (error: unknown) => {
+              this.submitting.set(false);
+              this.errorMessage.set(
+                getHttpErrorMessage(error, 'Could not assign and create the tasks.'),
+              );
+            },
+          });
+        return;
+      }
+    }
+
     this.submitting.set(true);
     this.errorMessage.set('');
 
@@ -83,6 +130,41 @@ export class TaskFormComponent {
         );
       },
     });
+  }
+
+  toggleCandidate(userId: string): void {
+    this.selectedUserIds.update((selected) =>
+      selected.includes(userId)
+        ? selected.filter((id) => id !== userId)
+        : [...selected, userId],
+    );
+  }
+
+  toggleAllCandidates(): void {
+    const allUserIds = this.users().map((user) => user._id);
+    const allSelected =
+      allUserIds.length > 0 && allUserIds.every((userId) => this.selectedUserIds().includes(userId));
+
+    this.selectedUserIds.set(allSelected ? [] : allUserIds);
+  }
+
+  private loadUsers(): void {
+    this.usersLoading.set(true);
+    this.authService
+      .listUsers()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.users.set(response.users);
+          this.usersLoading.set(false);
+        },
+        error: (error: unknown) => {
+          this.usersLoading.set(false);
+          this.errorMessage.set(
+            getHttpErrorMessage(error, 'Could not load workspace users for assignment.'),
+          );
+        },
+      });
   }
 
   private loadTask(id: string): void {

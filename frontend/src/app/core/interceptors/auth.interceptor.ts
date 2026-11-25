@@ -13,10 +13,18 @@ export const authInterceptor: HttpInterceptorFn = (
   request,
   next
 ) => {
+  const publicAuthEndpoints = [
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/password-encryption/public-key',
+    '/api/auth/password-encryption/challenges',
+    '/api/auth/passkeys/authentication/options',
+    '/api/auth/passkeys/authentication/verify',
+  ];
 
   if (
     !request.url.startsWith('/api/') ||
-    request.url.startsWith('/api/auth/')
+    publicAuthEndpoints.includes(request.url)
   ) {
     return next(request);
   }

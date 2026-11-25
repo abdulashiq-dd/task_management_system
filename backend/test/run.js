@@ -9,7 +9,7 @@ const integration = ["exportModelExamples", "jsonExportExamples", "csvExportExam
 const root = mkdtempSync(join(tmpdir(), "task-hardening-"));
 const failures = [];
 let total = 0;
-const env = { ...process.env, JOB_QUEUE_MODE: "memory", EXPORT_ROOT: root, JWT_SECRET: randomBytes(32).toString("hex"), LOG_LEVEL: "silent" };
+const env = { ...process.env, NODE_ENV: "test", JOB_QUEUE_MODE: "memory", EXPORT_ROOT: root, JWT_SECRET: randomBytes(32).toString("hex"), LOG_LEVEL: "silent" };
 function run(file, args = []) {
   total++; console.log(`\nRUNNING ${file}`);
   const result = spawnSync(process.execPath, [file, ...args], { env, stdio: "inherit", timeout: 180000 });
@@ -18,9 +18,11 @@ function run(file, args = []) {
 async function main() {
   const unitOnly = process.argv.includes("--unit"), integrationOnly = process.argv.includes("--integration");
   if (!integrationOnly) {
+    run("test/passwordEncryption.unit.test.js");
     run("test/hardening.unit.test.js");
     run("test/milestone12.errors.test.js");
     run("test/milestone11.services.test.js");
+    run("test/passkeys.unit.test.js");
     for (const name of units) run(`test/legacy/${name}.js`);
   }
   if (!unitOnly) {
@@ -42,8 +44,11 @@ async function main() {
       const User = require("../src/models/userModel"), Task = require("../src/models/taskModel");
       await User.createIndexes();
       const [admin, user] = await User.create([{ name: "Fixture Admin", email: env.TEST_ADMIN_EMAIL, password: await bcrypt.hash(env.TEST_ADMIN_PASSWORD, 12), role: "admin" }, { name: "Fixture User", email: env.TEST_USER_EMAIL, password: await bcrypt.hash(env.TEST_USER_PASSWORD, 12), role: "user" }]);
+      await require("../src/models/passwordChallengeModel").createIndexes();
       await Task.create([{ title: "Fixture admin task", createdBy: admin._id }, { title: "Fixture assigned task", createdBy: admin._id, assignedTo: user._id }, { title: "Fixture user task", createdBy: user._id }]);
       for (const name of integration) run(`test/legacy/${name}.js`);
+      run("test/passkeys.integration.test.js");
+      run("test/passwordEncryption.integration.test.js");
       run("test/hardening.integration.test.js");
       run("test/milestone12.api.test.js");
     } finally {
