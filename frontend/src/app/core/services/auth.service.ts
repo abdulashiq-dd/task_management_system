@@ -2,7 +2,7 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { from, Observable, switchMap, tap } from 'rxjs';
 
 import { API_ENDPOINTS } from '../constants/api.constants';
 
@@ -12,7 +12,9 @@ import {
   LoginResponse,
   RegisterRequest,
   RegisterResponse,
+  WorkspaceUser,
 } from '../models/auth.model';
+import { PasswordEncryptionService } from './password-encryption.service';
 
 @Injectable({
   providedIn: 'root',
@@ -20,6 +22,7 @@ import {
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly passwordEncryption = inject(PasswordEncryptionService);
 
   private readonly storageKey = 'taskorbit_session';
 
@@ -32,22 +35,45 @@ export class AuthService {
   readonly isAdmin = computed(() => this.currentUser()?.role === 'admin');
 
   login(data: LoginRequest): Observable<LoginResponse> {
-    return this.http.post<LoginResponse>(API_ENDPOINTS.AUTH.LOGIN, data).pipe(
-      tap((response) => {
-        const session: AuthSession = {
-          token: response.token,
-          user: response.user,
-        };
-
-        sessionStorage.setItem(this.storageKey, JSON.stringify(session));
-
-        this.session.set(session);
-      }),
+    return from(
+      this.passwordEncryption.encryptPassword('login', data.email, data.password),
+    ).pipe(
+      switchMap((encrypted) =>
+        this.http.post<LoginResponse>(API_ENDPOINTS.AUTH.LOGIN, {
+          email: data.email.trim().toLowerCase(),
+          ...encrypted,
+        }),
+      ),
+      tap((response) => this.completeLogin(response)),
     );
   }
 
+  completeLogin(response: LoginResponse): void {
+    const session: AuthSession = {
+      token: response.token,
+      user: response.user,
+    };
+
+    sessionStorage.setItem(this.storageKey, JSON.stringify(session));
+    this.session.set(session);
+  }
+
   register(data: RegisterRequest): Observable<RegisterResponse> {
-    return this.http.post<RegisterResponse>(API_ENDPOINTS.AUTH.REGISTER, data);
+    return from(
+      this.passwordEncryption.encryptPassword('register', data.email, data.password),
+    ).pipe(
+      switchMap((encrypted) =>
+        this.http.post<RegisterResponse>(API_ENDPOINTS.AUTH.REGISTER, {
+          name: data.name,
+          email: data.email.trim().toLowerCase(),
+          ...encrypted,
+        }),
+      ),
+    );
+  }
+
+  listUsers(): Observable<{ message: string; users: WorkspaceUser[] }> {
+    return this.http.get<{ message: string; users: WorkspaceUser[] }>(API_ENDPOINTS.AUTH.USERS);
   }
 
   getToken(): string | null {

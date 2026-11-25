@@ -25,6 +25,7 @@ export interface TaskCreateRequest {
   priority?: TaskPriority;
   dueDate?: string | null;
   tags?: string[];
+  assignedTo?: string;
 }
 
 export type TaskUpdateRequest = Partial<TaskCreateRequest>;

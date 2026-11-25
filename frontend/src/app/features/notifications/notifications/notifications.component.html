@@ -1,1 +1,168 @@
-<p>notifications works!</p>
+<section class="notifications-page" aria-labelledby="notifications-title">
+  <header class="notifications-heading">
+    <div>
+      <p class="eyebrow">Your inbox</p>
+      <h2 id="notifications-title">Notifications</h2>
+      <p class="heading-copy">Stay on top of task updates, assignments, and reminders.</p>
+    </div>
+    @if (totalNotifications() > 0) {
+      <button
+        class="secondary-button mark-all-button"
+        type="button"
+        [disabled]="loading() || markingAll() || markingNotificationId() !== null"
+        (click)="markAllAsRead()"
+      >
+        @if (markingAll()) {
+          <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+          Updating...
+        } @else {
+          <i class="pi pi-check-double" aria-hidden="true"></i>
+          Mark all as read
+        }
+      </button>
+    }
+  </header>
+
+  <section class="inbox-panel" aria-label="Notification inbox">
+    <div class="inbox-toolbar">
+      <div class="filter-tabs" role="group" aria-label="Notification filter">
+        <button
+          type="button"
+          [class.active-filter]="filter() === 'all'"
+          [attr.aria-pressed]="filter() === 'all'"
+          [disabled]="loading()"
+          (click)="loadNotifications(1, 'all')"
+        >
+          All
+        </button>
+        <button
+          type="button"
+          [class.active-filter]="filter() === 'unread'"
+          [attr.aria-pressed]="filter() === 'unread'"
+          [disabled]="loading()"
+          (click)="loadNotifications(1, 'unread')"
+        >
+          Unread
+        </button>
+      </div>
+      @if (!loading() && !errorMessage()) {
+        <span class="inbox-count">
+          {{ totalNotifications() }} {{ filter() === 'unread' ? 'unread' : 'total' }}
+          {{ totalNotifications() === 1 ? 'notification' : 'notifications' }}
+        </span>
+      }
+    </div>
+
+    @if (actionError()) {
+      <div class="notification-alert" role="alert">
+        <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
+        {{ actionError() }}
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="state-card" role="status">
+        <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+        Loading notifications...
+      </div>
+    } @else if (errorMessage()) {
+      <div class="state-card error-state" role="alert">
+        <span class="state-icon"><i class="pi pi-exclamation-circle" aria-hidden="true"></i></span>
+        <h3>We couldn’t load your notifications</h3>
+        <p>{{ errorMessage() }}</p>
+        <button class="secondary-button" type="button" (click)="loadNotifications()">
+          Try again
+        </button>
+      </div>
+    } @else if (notifications().length === 0) {
+      <div class="state-card empty-state">
+        <span class="state-icon"><i class="pi pi-bell-slash" aria-hidden="true"></i></span>
+        @if (filter() === 'unread') {
+          <h3>You’re all caught up</h3>
+          <p>There are no unread notifications right now.</p>
+          <button class="secondary-button" type="button" (click)="loadNotifications(1, 'all')">
+            View all notifications
+          </button>
+        } @else {
+          <h3>No notifications yet</h3>
+          <p>Task assignments, reminders, and updates will show up here.</p>
+        }
+      </div>
+    } @else {
+      <div class="notification-list" role="list" aria-label="Notifications">
+        @for (notification of notifications(); track notification._id) {
+          <article
+            class="notification-card"
+            [class.unread-notification]="!notification.isRead"
+            role="listitem"
+          >
+            <span class="notification-icon">
+              <i [class]="notificationIcon(notification.type)" aria-hidden="true"></i>
+            </span>
+            <div class="notification-copy">
+              <div class="notification-title-row">
+                <span class="notification-type">{{ notificationLabel(notification.type) }}</span>
+                @if (!notification.isRead) {
+                  <span class="unread-dot" aria-label="Unread"></span>
+                }
+              </div>
+              <p>{{ notification.message }}</p>
+              <div class="notification-meta">
+                <time [attr.datetime]="notification.createdAt">
+                  <i class="pi pi-clock" aria-hidden="true"></i>
+                  {{ formatDate(notification.createdAt) }}
+                </time>
+                <a class="open-task-link" [routerLink]="['/tasks', notification.task]">
+                  Open task
+                  <i class="pi pi-arrow-up-right" aria-hidden="true"></i>
+                </a>
+              </div>
+            </div>
+            @if (!notification.isRead) {
+              <button
+                class="mark-read-button"
+                type="button"
+                [disabled]="markingNotificationId() !== null || markingAll()"
+                [attr.aria-label]="'Mark as read: ' + notification.message"
+                (click)="markAsRead(notification)"
+              >
+                @if (markingNotificationId() === notification._id) {
+                  <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+                } @else {
+                  <i class="pi pi-check" aria-hidden="true"></i>
+                }
+                <span>Mark read</span>
+              </button>
+            }
+          </article>
+        }
+      </div>
+
+      @if (totalPages() > 1) {
+        <nav class="pagination" aria-label="Notification pages">
+          <span>Page {{ currentPage() }} of {{ totalPages() }}</span>
+          <div class="pagination-actions">
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() <= 1 || loading()"
+              (click)="loadNotifications(currentPage() - 1)"
+            >
+              <i class="pi pi-arrow-left" aria-hidden="true"></i>
+              Previous
+            </button>
+            <button
+              class="secondary-button"
+              type="button"
+              [disabled]="currentPage() >= totalPages() || loading()"
+              (click)="loadNotifications(currentPage() + 1)"
+            >
+              Next
+              <i class="pi pi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </nav>
+      }
+    }
+  </section>
+</section>

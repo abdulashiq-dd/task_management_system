@@ -23,6 +23,7 @@ const { FILE_TYPES, deleteFile } = require('../src/config/fileStorage');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { sleep } = require('../src/utils/retry');
+const { encryptedPassword } = require('./helpers/encryptedPassword');
 let server, baseUrl, passed = 0;
 function current(user) { return { id: String(user._id), role: user.role }; }
 const token = user => jwt.sign({ sub:String(user._id) }, process.env.JWT_SECRET, { algorithm:'HS256', expiresIn:'1h' });
@@ -35,7 +36,7 @@ async function check(name,fn){ await fn(); passed++; console.log(`[PASS] ${name}
 async function until(fn){ const end=Date.now()+15000;while(Date.now()<end){const result=await fn();if(result)return result;await sleep(50);}throw new Error('Timed out waiting for durable job'); }
 async function main(){
   await mongoose.connect(process.env.MONGO_URI);
-  await Promise.all([Task, User, Notification, TaskActivity, Export, BackgroundJob].map(Model=>Model.createIndexes()));
+  await Promise.all([Task, User, Notification, TaskActivity, Export, BackgroundJob, require('../src/models/passwordChallengeModel')].map(Model=>Model.createIndexes()));
   await BackgroundJob.deleteMany({}); // Disconnected, disposable database only.
   const suffix=randomUUID();
   const passwordHash=await bcrypt.hash(randomUUID(),12);
@@ -109,6 +110,8 @@ async function main(){
   });
   await check('C4/C5: paginated notifications and jobs; private keys not exposed',async()=>{
     const n=await request('GET','/api/notifications?page=1&limit=1',assignee);assert.equal(n.status,200);assert.equal(n.data.notifications.length,1);assert.equal(n.data.pagination.limit,1);assert.ok(!Object.hasOwn(n.data.notifications[0],'backgroundJobId'));assert.ok(!Object.hasOwn(n.data.notifications[0],'deduplicationKey'));
+    const a=await request('GET','/api/activity?page=1&limit=1',assignee);assert.equal(a.status,200);assert.equal(a.data.activities.length,1);assert.equal(a.data.pagination.limit,1);assert.equal(a.data.activities[0].taskTitle,'Hardening task');assert.ok(!Object.hasOwn(a.data.activities[0],'backgroundJobId'));
+    const hidden=await request('GET','/api/activity',other);assert.equal(hidden.status,200);assert.equal(hidden.data.activities.length,0);
     const j=await request('GET','/api/jobs?page=1&limit=1',admin);assert.equal(j.status,200);assert.equal(j.data.jobs.length,1);assert.ok(j.data.pagination.total>1);
   });
   await check('A4: queued admin export runs with demoted role and correct task scope',async()=>{
@@ -127,7 +130,10 @@ async function main(){
   });
   await check('D2/A5: register without body is 400; incorrect and nonexistent login are 401',async()=>{
     assert.equal((await request('POST','/api/auth/register',null)).status,400);
-    for(const email of [creator.email,'unknown@example.invalid']) assert.equal((await request('POST','/api/auth/login',null,{email,password:'not-correct'})).status,401);
+    for(const email of [creator.email,'unknown@example.invalid']) {
+      const credentials = await encryptedPassword(baseUrl, 'login', email, 'not-correct');
+      assert.equal((await request('POST','/api/auth/login',null,credentials)).status,401);
+    }
   });
   await check('F1: creator and admin deletion authorized',async()=>{
     const a=(await request('POST','/api/tasks',creator,{title:'Delete me'})).data.task._id;

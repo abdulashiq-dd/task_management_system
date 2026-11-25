@@ -14,6 +14,7 @@ const { jobQueue, JOB_TYPES } = require("../src/queues/jobQueue");
 const { QueueWorker } = require("../src/workers/jobWorker");
 const { sleep } = require("../src/utils/retry");
 const { NonRetryableError } = require("../src/utils/jobErrors");
+const { encryptedPassword } = require("./helpers/encryptedPassword");
 
 let server, base, owner, outsider, worker;
 const jwtFor = user => jwt.sign({ sub: String(user._id) }, process.env.JWT_SECRET, { algorithm: "HS256", expiresIn: "1h" });
@@ -27,7 +28,7 @@ async function request(method, path, user, body, raw = false) {
 test.before(async () => {
   await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
   if (!/^task_hardening_test_[a-f0-9]{32}$/.test(mongoose.connection.name)) throw Error("Unexpected test database");
-  await Promise.all([Task.createIndexes(), User.createIndexes(), BackgroundJob.createIndexes()]);
+  await Promise.all([Task.createIndexes(), User.createIndexes(), BackgroundJob.createIndexes(), require("../src/models/passwordChallengeModel").createIndexes()]);
   // The runner already created these two fixture identities.
   owner = await User.findOne({ email: process.env.TEST_USER_EMAIL });
   outsider = await User.create({ name: "M12 outsider", email: `${randomUUID()}@example.invalid`, password: "unused-fixture-hash", role: "user" });
@@ -66,7 +67,8 @@ test("M12 HTTP: unauthorized, forbidden and missing resources retain their statu
 });
 
 test("M12 HTTP: duplicate registration returns 409; rejected database promise is sanitized", async t => {
-  const duplicate = await request("POST", "/api/auth/register", null, { name: "Duplicate fixture", email: owner.email, password: "test-password-123" });
+  const credentials = await encryptedPassword(base, "register", owner.email, "test-password-123");
+  const duplicate = await request("POST", "/api/auth/register", null, { ...credentials, name: "Duplicate fixture" });
   assert.equal(duplicate.status, 409);
   assert.deepEqual(duplicate.body, { message: "Email already registered" });
   // Mock one dependency only for the next HTTP request; restore it in finally.

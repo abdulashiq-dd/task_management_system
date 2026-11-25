@@ -57,9 +57,30 @@ class TaskService {
   // 1. CREATE TASK
   // ==========================================
 
-  async createTask(taskData, currentUser) {
+  async createTask(taskData, currentUser, assignedTo = null) {
     validateUser(currentUser);
-    const newTask = new this.#Task({ ...taskFields(taskData), createdBy: currentUser.id });
+    const taskFieldsValue = taskFields(taskData);
+
+    let assignee = null;
+    if (assignedTo !== null && assignedTo !== undefined && assignedTo !== "") {
+      if (currentUser.role !== "admin") {
+        throw createError("Only administrators can assign tasks", 403);
+      }
+      if (!mongoose.isValidObjectId(assignedTo)) {
+        throw createError("Invalid assignee ID", 400);
+      }
+      const user = await this.#User.findById(assignedTo);
+      if (!user) {
+        throw createError("User not found", 404);
+      }
+      assignee = user._id;
+    }
+
+    const newTask = new this.#Task({
+      ...taskFieldsValue,
+      createdBy: currentUser.id,
+      assignedTo: assignee,
+    });
     await newTask.validate();
     newTask.pendingEvents = [this.#outbox.makeEvent("taskCreated", newTask, currentUser.id, { title: newTask.title, status: newTask.status, priority: newTask.priority })];
     await newTask.save();

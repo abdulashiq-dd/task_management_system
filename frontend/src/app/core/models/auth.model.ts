@@ -19,6 +19,28 @@ export interface RegisterRequest {
   password: string;
 }
 
+export type PasswordOperation = 'login' | 'register';
+
+export interface PasswordEncryptionKey {
+  keyId: string;
+  publicKeySpki: string;
+}
+
+export interface PasswordEncryptionChallenge {
+  challengeId: string;
+  challenge: string;
+  operation: PasswordOperation;
+  account: string;
+  keyId: string;
+  expiresAt: string;
+}
+
+export interface EncryptedPassword {
+  challengeId: string;
+  keyId: string;
+  encryptedPassword: string;
+}
+
 export interface LoginResponse {
   message: string;
   token: string;
@@ -33,4 +55,11 @@ export interface RegisterResponse {
 export interface AuthSession {
   token: string;
   user: User;
+}
+
+export interface WorkspaceUser {
+  _id: string;
+  name: string;
+  email: string;
+  role: UserRole;
 }

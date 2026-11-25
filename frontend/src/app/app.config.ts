@@ -22,6 +22,7 @@ import {
 import Aura from '@primeuix/themes/aura';
 
 import { routes } from './app.routes';
+import { environment } from '../environments/environment';
 
 import {
   authInterceptor
@@ -65,7 +66,8 @@ export const appConfig: ApplicationConfig = {
           darkModeSelector: '.app-dark'
         }
       },
-      ripple: true
+      ripple: true,
+      license: environment.primeUiLicense
     })
   ]
 };

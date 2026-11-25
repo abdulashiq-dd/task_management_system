@@ -93,6 +93,12 @@ class NotificationService {
 
     const { page, limit, skip } = pagination(query);
     const filter = { user: userId };
+    if (query.isRead !== undefined) {
+      if (query.isRead !== "true" && query.isRead !== "false") {
+        throw createError("Invalid isRead filter", 400);
+      }
+      filter.isRead = query.isRead === "true";
+    }
     const [notifications, total] = await Promise.all([
       this.#Notification.find(filter).select(PUBLIC_FIELDS).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       this.#Notification.countDocuments(filter),

@@ -1,27 +1,69 @@
 const { createError } = require("../utils/httpError");
 
 const authService = require("../services/authService");
+const User = require("../models/userModel");
+const passwordEncryptionService = require("../services/passwordEncryptionService");
+
+const rejectPlaintextPassword = body => {
+  if (Object.prototype.hasOwnProperty.call(body || {}, "password")) {
+    throw createError("Plaintext passwords are not accepted", 400);
+  }
+};
+
+const getPasswordEncryptionKey = (req, res, next) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json(passwordEncryptionService.getPublicKey());
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createPasswordChallenge = async (req, res, next) => {
+  try {
+    rejectPlaintextPassword(req.body);
+    const challenge = await passwordEncryptionService.createChallenge(req.body || {});
+    res.set("Cache-Control", "no-store");
+    return res.status(201).json(challenge);
+  } catch (error) {
+    next(error);
+  }
+};
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body || {};
+    rejectPlaintextPassword(req.body);
+    const { name, email } = req.body || {};
+    const { challengeId, keyId, encryptedPassword } = req.body || {};
 
     if (
       typeof name !== "string" ||
       !name.trim() ||
       typeof email !== "string" ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
-      typeof password !== "string" ||
-      password.length < 8 ||
-      Buffer.byteLength(password, "utf8") > 72
+      Buffer.byteLength(email.trim(), "utf8") > 254 ||
+      typeof encryptedPassword !== "string" ||
+      typeof challengeId !== "string" ||
+      typeof keyId !== "string"
     ) {
-      throw createError("Valid name, email and password (8–72 bytes) are required", 400);
+      throw createError("Valid name, email and encrypted password are required", 400);
+    }
+
+    const decryptedPassword = await passwordEncryptionService.decryptPassword({
+      operation: "register",
+      account: email,
+      challengeId,
+      keyId,
+      encryptedPassword
+    });
+    if (decryptedPassword.length < 8) {
+      throw createError("Password must contain at least 8 characters", 400);
     }
 
     const user = await authService.registerUser({
       name,
       email,
-      password
+      password: decryptedPassword
     });
 
     return res.status(201).json({
@@ -36,20 +78,33 @@ const register = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body || {};
+    rejectPlaintextPassword(req.body);
+    const { email } = req.body || {};
+    const { challengeId, keyId, encryptedPassword } = req.body || {};
 
     if (
       typeof email !== "string" ||
       !email.trim() ||
-      typeof password !== "string" ||
-      !password || Buffer.byteLength(password, "utf8") > 72
+      Buffer.byteLength(email.trim(), "utf8") > 254 ||
+      typeof encryptedPassword !== "string" ||
+      typeof challengeId !== "string" ||
+      typeof keyId !== "string"
     ) {
-      throw createError("Email and a password of at most 72 bytes are required", 400);
+      throw createError("Email and encrypted password are required", 400);
     }
+
+    const decryptedPassword = await passwordEncryptionService.decryptPassword({
+      operation: "login",
+      account: email,
+      challengeId,
+      keyId,
+      encryptedPassword
+    });
+    if (!decryptedPassword) throw createError("Email and password are required", 400);
 
     const result = await authService.loginUser({
       email,
-      password
+      password: decryptedPassword
     });
 
     return res.status(200).json({
@@ -61,4 +116,26 @@ const login = async (req, res, next) => {
   }
 };
 
-module.exports = { register , login };
+const listUsers = async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      throw createError("Administrator access required", 403);
+    }
+
+    const users = await User.find({}, "_id name email role").sort({ name: 1 });
+    return res.status(200).json({
+      message: "Users retrieved successfully",
+      users,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  createPasswordChallenge,
+  getPasswordEncryptionKey,
+  register,
+  login,
+  listUsers
+};

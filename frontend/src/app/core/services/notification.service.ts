@@ -8,8 +8,11 @@ import { NotificationListResponse } from '../models/notification.model';
 export class NotificationService {
   private readonly http = inject(HttpClient);
 
-  list(page = 1, limit = 20): Observable<NotificationListResponse> {
-    const params = new HttpParams().set('page', page).set('limit', limit);
+  list(page = 1, limit = 20, isRead?: boolean): Observable<NotificationListResponse> {
+    let params = new HttpParams().set('page', page).set('limit', limit);
+    if (isRead !== undefined) {
+      params = params.set('isRead', isRead);
+    }
     return this.http.get<NotificationListResponse>(API_ENDPOINTS.NOTIFICATIONS, { params });
   }
 
